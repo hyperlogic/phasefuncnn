@@ -1,3 +1,5 @@
-bvhio
+bvh
+pyglm
+glfw
 tqdm
 pygfx
