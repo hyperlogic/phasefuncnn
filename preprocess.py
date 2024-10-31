@@ -1,4 +1,5 @@
 from bvh import Bvh
+import glm
 import preprocess
 
 with open("../PFNN/data/animations/LocomotionFlat09_000.bvh") as f:
@@ -7,7 +8,7 @@ with open("../PFNN/data/animations/LocomotionFlat09_000.bvh") as f:
 print(f"frames = {bvh.nframes}")
 print(f"frame_time = {bvh.frame_time}")
 
-input = preprocess.build_input(bvh)
+skeleton, input = preprocess.build_input(bvh)
 
 if __name__ == "__main__":
-    preprocess.visualize_input(input)
+    preprocess.visualize_input(skeleton, input)
