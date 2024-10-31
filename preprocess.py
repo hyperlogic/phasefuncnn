@@ -1,6 +1,4 @@
 from bvh import Bvh
-import glm
-import pygfx as gfx
 import preprocess
 
 with open("../PFNN/data/animations/LocomotionFlat09_000.bvh") as f:
