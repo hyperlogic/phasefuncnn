@@ -4,33 +4,64 @@ import numpy as np
 from tqdm import trange, tqdm
 
 TRAJ_WINDOW = 12
+PI_OVER_180 = math.pi / 180
+
+X_AXIS = np.array([1, 0, 0])
+Y_AXIS = np.array([0, 1, 0])
+Z_AXIS = np.array([0, 0, 1])
 
 
 def axis_angle_to_quat(axis, angle):
-    n = glm.normalize(axis) * math.sin(angle / 2)
+    n = axis * (math.sin(angle / 2) / np.linalg.norm(axis))
     w = math.cos(angle / 2)
-    return glm.quat(w, n.x, n.y, n.z)
+    return np.array([n[0], n[1], n[2], w])
 
 
-def quat_to_mat4(quat):
-    x_axis = quat * glm.vec3(1, 0, 0)
-    y_axis = quat * glm.vec3(0, 1, 0)
-    z_axis = quat * glm.vec3(0, 0, 1)
-    return glm.mat4(
-        glm.vec4(x_axis, 0),
-        glm.vec4(y_axis, 0),
-        glm.vec4(z_axis, 0),
-        glm.vec4(0, 0, 0, 1),
+def quat_conj(quat):
+    return np.array([-quat[0], -quat[1], -quat[2], quat[3]])
+
+
+def quat_rotate(quat, vec):
+    r = quat_mul(
+        quat,
+        quat_mul(
+            np.array([vec[0], vec[1], vec[2], 0]),
+            quat_conj(quat),
+        ),
+    )
+    return np.array([r[0], r[1], r[2]])
+
+
+def quat_rot4(quat, vec):
+    return quat_mul(
+        quat,
+        quat_mul(
+            np.array([vec[0], vec[1], vec[2], 0]),
+            quat_conj(quat),
+        ),
     )
 
 
-# TODO: remove
+def quat_to_mat4(quat, pos):
+    col0 = quat_rot4(quat, X_AXIS)
+    col1 = quat_rot4(quat, Y_AXIS)
+    col2 = quat_rot4(quat, Z_AXIS)
+    col3 = np.array([pos[0], pos[1], pos[2], 1])
+    return np.column_stack((col0, col1, col2, col3))
+
+
+def deg_to_rad(deg):
+    return deg * PI_OVER_180
+
+
 def quat_mul(lhs, rhs):
-    return glm.quat(
-        -lhs.x * rhs.x - lhs.y * rhs.y - lhs.z * rhs.z + lhs.w * rhs.w,
-        lhs.x * rhs.w + lhs.y * rhs.z - lhs.z * rhs.y + lhs.w * rhs.x,
-        -lhs.x * rhs.z + lhs.y * rhs.w + lhs.z * rhs.x + lhs.w * rhs.y,
-        lhs.x * rhs.y - lhs.y * rhs.x + lhs.z * rhs.w + lhs.w * rhs.z,
+    return np.array(
+        [
+            lhs[0] * rhs[3] + lhs[1] * rhs[2] - lhs[2] * rhs[1] + lhs[3] * rhs[0],
+            -lhs[0] * rhs[2] + lhs[1] * rhs[3] + lhs[2] * rhs[0] + lhs[3] * rhs[1],
+            lhs[0] * rhs[1] - lhs[1] * rhs[0] + lhs[2] * rhs[3] + lhs[3] * rhs[2],
+            -lhs[0] * rhs[0] - lhs[1] * rhs[1] - lhs[2] * rhs[2] + lhs[3] * rhs[3],
+        ]
     )
 
 
@@ -92,29 +123,31 @@ def build_xforms_at_frame(bvh, skeleton, frame, debug=False):
         joint_name = skeleton.get_joint_name(i)
         offset = skeleton.get_joint_offset(joint_name)
 
-        pos = glm.vec3(offset[0], offset[1], offset[2])
+        pos = np.array(offset)
         if skeleton.has_pos(joint_name):
-            pos += glm.vec3(
-                bvh.frame_joint_channel(frame, joint_name, "Xposition"),
-                bvh.frame_joint_channel(frame, joint_name, "Yposition"),
-                bvh.frame_joint_channel(frame, joint_name, "Zposition"),
+            pos += np.array(
+                [
+                    bvh.frame_joint_channel(frame, joint_name, "Xposition"),
+                    bvh.frame_joint_channel(frame, joint_name, "Yposition"),
+                    bvh.frame_joint_channel(frame, joint_name, "Zposition"),
+                ]
             )
 
-        rot = glm.quat()
+        rot = np.array([0, 0, 0, 1])
         if skeleton.has_rot(joint_name):
             x_rot = axis_angle_to_quat(
-                glm.vec3(1, 0, 0),
-                glm.radians(bvh.frame_joint_channel(frame, joint_name, "Xrotation")),
+                X_AXIS,
+                deg_to_rad(bvh.frame_joint_channel(frame, joint_name, "Xrotation")),
             )
             y_rot = axis_angle_to_quat(
-                glm.vec3(0, 1, 0),
-                glm.radians(bvh.frame_joint_channel(frame, joint_name, "Yrotation")),
+                Y_AXIS,
+                deg_to_rad(bvh.frame_joint_channel(frame, joint_name, "Yrotation")),
             )
             z_rot = axis_angle_to_quat(
-                glm.vec3(0, 0, 1),
-                glm.radians(bvh.frame_joint_channel(frame, joint_name, "Zrotation")),
+                Z_AXIS,
+                deg_to_rad(bvh.frame_joint_channel(frame, joint_name, "Zrotation")),
             )
-            rot = z_rot * (y_rot * x_rot)
+            rot = quat_mul(z_rot, quat_mul(y_rot, x_rot))
 
         if debug:
             print(f"    {joint_name}")
@@ -124,22 +157,20 @@ def build_xforms_at_frame(bvh, skeleton, frame, debug=False):
                 z_rot = bvh.frame_joint_channel(frame, joint_name, "Zrotation")
                 print(f"        (local) euler (deg) = {(x_rot, y_rot, z_rot)}")
                 print(
-                    f"        (local) euler (rad) = {(glm.radians(x_rot), glm.radians(y_rot), glm.radians(z_rot))}"
+                    f"        (local) euler (rad) = {(deg_to_rad(x_rot), deg_to_rad(y_rot), deg_to_rad(z_rot))}"
                 )
             print(f"        (local) pos = {pos}, rot = {rot}")
 
-        m = quat_to_mat4(rot)
-        m[3] = glm.vec4(pos, 1)
+        m = quat_to_mat4(rot, pos)
         parent_index = skeleton.get_parent_index(joint_name)
         if parent_index >= 0:
-            xforms[i] = xforms[parent_index] * m
+            xforms[i] = xforms[parent_index] @ m
         else:
             xforms[i] = m
 
         if debug:
-            global_pos = glm.vec3(xforms[i][3][0], xforms[i][3][1], xforms[i][3][2])
-            global_rot = glm.normalize(glm.quat(xforms[i]))
-            print(f"        (global) pos = {global_pos}, rot = {global_rot}")
+            global_pos = np.array([xforms[i][3][0], xforms[i][3][1], xforms[i][3][2]])
+            print(f"        (global) pos = {global_pos}")
 
     return xforms
 
@@ -163,7 +194,8 @@ def build_input(bvh):
         # build j_pos
         input = Input(TRAJ_WINDOW, skeleton.num_joints)
         for i in range(skeleton.num_joints):
-            input.j_pos[i] = glm.vec3(xforms[i][3][0], xforms[i][3][1], xforms[i][3][2])
+            # input.j_pos[i] = glm.vec3(xforms[i][3][0], xforms[i][3][1], xforms[i][3][2])
+            input.j_pos[i] = glm.vec3(xforms[i][0][3], xforms[i][1][3], xforms[i][2][3])
 
         inputs.append(input)
 
@@ -179,7 +211,7 @@ def build_input(bvh):
                     print(f"POP frame = {frame}, joint = {skeleton.get_joint_name(i)}")
                     print(f"    prev = {prev}")
                     print(f"    curr = {curr}")
-                    #build_xforms_at_frame(bvh, skeleton, frame - 1, True)
-                    #build_xforms_at_frame(bvh, skeleton, frame, True)
+                    # build_xforms_at_frame(bvh, skeleton, frame - 1, True)
+                    # build_xforms_at_frame(bvh, skeleton, frame, True)
 
     return skeleton, inputs
