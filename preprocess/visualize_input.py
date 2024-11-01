@@ -5,7 +5,12 @@ import sys
 from wgpu.gui.auto import WgpuCanvas, run
 
 cubes = []
-frame = 0
+
+start_frame = 156
+end_frame = 158
+
+frame = start_frame
+
 g_inputs = []
 
 scene = None
@@ -17,8 +22,8 @@ canvas = None
 def animate():
     global frame
     frame = frame + 1
-    if frame >= len(g_inputs):
-        frame = 0
+    if frame >= end_frame or frame >= len(g_inputs):
+        frame = start_frame
 
     for j in range(len(g_inputs[frame].j_pos)):
         cubes[j].local.position = g_inputs[frame].j_pos[j]
@@ -38,7 +43,7 @@ def visualize_input(skeleton, inputs):
     global renderer, canvas, scene, camera
 
     scene = gfx.Scene()
-    scene.add(gfx.AmbientLight())
+    scene.add(gfx.AmbientLight(intensity=1))
     scene.add(gfx.DirectionalLight())
     camera = gfx.PerspectiveCamera(70, 16 / 9)
 
@@ -52,6 +57,7 @@ def visualize_input(skeleton, inputs):
     joint_colors[skeleton.get_joint_index("Head")] = "#00ff00"
     joint_colors[skeleton.get_joint_index("LeftToeBase")] = "#0000ff"
     joint_colors[skeleton.get_joint_index("RightToeBase")] = "#ff0000"
+    joint_colors[skeleton.get_joint_index("LeftForeArm")] = "#ffff00"
 
     joint_size = [0.5 for j in range(skeleton.num_joints)]
     joint_size[skeleton.get_joint_index("Head")] = 3
