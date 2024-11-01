@@ -19,6 +19,7 @@ scene = None
 renderer = None
 camera = None
 canvas = None
+controller = None
 
 
 def animate():
@@ -30,7 +31,8 @@ def animate():
     for j in range(len(g_inputs[frame].j_pos)):
         cubes[j].local.position = g_inputs[frame].j_pos[j]
 
-    global renderer, canvas, scene, camera
+    global renderer, canvas, scene, camera, controller
+
     renderer.render(scene, camera)
     canvas.request_draw()
 
@@ -42,12 +44,11 @@ def on_key_down(event):
 
 def visualize_input(skeleton, inputs):
 
-    global renderer, canvas, scene, camera
+    global renderer, canvas, scene, camera, controller
 
     scene = gfx.Scene()
     scene.add(gfx.AmbientLight(intensity=1))
     scene.add(gfx.DirectionalLight())
-    camera = gfx.PerspectiveCamera(70, 16 / 9)
 
     global g_inputs
     g_inputs = inputs
@@ -78,13 +79,12 @@ def visualize_input(skeleton, inputs):
     scene.add(gfx.helpers.AxesHelper(10.0, 0.5))
     scene.add(gfx.helpers.GridHelper(size=100))
 
+    camera = gfx.PerspectiveCamera(70, 4 / 3)
+    camera.show_object(scene, up=(0, 1, 0), scale=1.4)
+
     canvas = WgpuCanvas()
     renderer = gfx.renderers.WgpuRenderer(canvas)
-    controller = gfx.OrbitController(camera, register_events=renderer)
-
-    camera.local.position = (10, 1, 0)
-    camera.look_at((0, 0, 0))
-
+    controller = gfx.OrbitController(camera=camera, register_events=renderer)
 
     renderer.add_event_handler(on_key_down, "key_down")
 
