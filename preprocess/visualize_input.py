@@ -6,8 +6,10 @@ from wgpu.gui.auto import WgpuCanvas, run
 
 cubes = []
 
-start_frame = 156
-end_frame = 158
+#start_frame = 156
+#end_frame = 158
+start_frame = 0
+end_frame = sys.maxsize
 
 frame = start_frame
 

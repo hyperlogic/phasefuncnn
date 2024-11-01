@@ -24,6 +24,7 @@ def quat_to_mat4(quat):
     )
 
 
+# TODO: remove
 def quat_mul(lhs, rhs):
     return glm.quat(
         -lhs.x * rhs.x - lhs.y * rhs.y - lhs.z * rhs.z + lhs.w * rhs.w,
@@ -80,84 +81,105 @@ class Skeleton:
         return self.joint_offset_map[joint_name]
 
 
+def build_xforms_at_frame(bvh, skeleton, frame, debug=False):
+
+    xforms = [glm.mat4() for i in range(skeleton.num_joints)]
+
+    if debug:
+        print(f"frame = {frame}")
+
+    for i in range(skeleton.num_joints):
+        joint_name = skeleton.get_joint_name(i)
+        offset = skeleton.get_joint_offset(joint_name)
+
+        pos = glm.vec3(offset[0], offset[1], offset[2])
+        if skeleton.has_pos(joint_name):
+            pos += glm.vec3(
+                bvh.frame_joint_channel(frame, joint_name, "Xposition"),
+                bvh.frame_joint_channel(frame, joint_name, "Yposition"),
+                bvh.frame_joint_channel(frame, joint_name, "Zposition"),
+            )
+
+        rot = glm.quat()
+        if skeleton.has_rot(joint_name):
+            x_rot = axis_angle_to_quat(
+                glm.vec3(1, 0, 0),
+                glm.radians(bvh.frame_joint_channel(frame, joint_name, "Xrotation")),
+            )
+            y_rot = axis_angle_to_quat(
+                glm.vec3(0, 1, 0),
+                glm.radians(bvh.frame_joint_channel(frame, joint_name, "Yrotation")),
+            )
+            z_rot = axis_angle_to_quat(
+                glm.vec3(0, 0, 1),
+                glm.radians(bvh.frame_joint_channel(frame, joint_name, "Zrotation")),
+            )
+            rot = z_rot * (y_rot * x_rot)
+
+        if debug:
+            print(f"    {joint_name}")
+            if skeleton.has_rot(joint_name):
+                x_rot = bvh.frame_joint_channel(frame, joint_name, "Xrotation")
+                y_rot = bvh.frame_joint_channel(frame, joint_name, "Yrotation")
+                z_rot = bvh.frame_joint_channel(frame, joint_name, "Zrotation")
+                print(f"        (local) euler (deg) = {(x_rot, y_rot, z_rot)}")
+                print(
+                    f"        (local) euler (rad) = {(glm.radians(x_rot), glm.radians(y_rot), glm.radians(z_rot))}"
+                )
+            print(f"        (local) pos = {pos}, rot = {rot}")
+
+        m = quat_to_mat4(rot)
+        m[3] = glm.vec4(pos, 1)
+        parent_index = skeleton.get_parent_index(joint_name)
+        if parent_index >= 0:
+            xforms[i] = xforms[parent_index] * m
+        else:
+            xforms[i] = m
+
+        if debug:
+            global_pos = glm.vec3(xforms[i][3][0], xforms[i][3][1], xforms[i][3][2])
+            global_rot = glm.normalize(glm.quat(xforms[i]))
+            print(f"        (global) pos = {global_pos}, rot = {global_rot}")
+
+    return xforms
+
+
 def build_input(bvh):
-    num_frames = 240  # bvh.nframes
+    num_frames = bvh.nframes
     frame_time = bvh.frame_time
 
-    s = Skeleton(bvh)
+    skeleton = Skeleton(bvh)
 
-    pop_check = True
+    pop_check = False
 
-    print(s.joint_names)
+    print(skeleton.joint_names)
 
     inputs = []
 
     for frame in trange(num_frames):
 
-        xforms = [glm.mat4() for i in range(s.num_joints)]
-
-        root_trans = glm.vec3(0, 0, 0)
-
-        # build xforms
-        for i in range(s.num_joints):
-            joint_name = s.get_joint_name(i)
-            offset = s.get_joint_offset(joint_name)
-
-            pos = glm.vec3(offset[0], offset[1], offset[2])
-            if s.has_pos(joint_name):
-                pos += glm.vec3(
-                    bvh.frame_joint_channel(frame, joint_name, "Xposition"),
-                    bvh.frame_joint_channel(frame, joint_name, "Yposition"),
-                    bvh.frame_joint_channel(frame, joint_name, "Zposition"),
-                )
-
-            rot = glm.quat()
-            if s.has_rot(joint_name):
-                x_rot = glm.radians(
-                    bvh.frame_joint_channel(frame, joint_name, "Xrotation")
-                )
-                y_rot = glm.radians(
-                    bvh.frame_joint_channel(frame, joint_name, "Yrotation")
-                )
-                z_rot = glm.radians(
-                    bvh.frame_joint_channel(frame, joint_name, "Zrotation")
-                )
-                rot = (
-                    axis_angle_to_quat(glm.vec3(0, 0, 1), z_rot)
-                    * axis_angle_to_quat(glm.vec3(1, 0, 0), x_rot)
-                    * axis_angle_to_quat(glm.vec3(0, 1, 0), y_rot)
-                )
-
-            m = quat_to_mat4(rot)
-            m[3] = glm.vec4(pos, 1)
-            parent_index = s.get_parent_index(joint_name)
-            if parent_index >= 0:
-                xforms[i] = xforms[parent_index] * m
-            else:
-                xforms[i] = m
+        xforms = build_xforms_at_frame(bvh, skeleton, frame)
 
         # build j_pos
-        input = Input(TRAJ_WINDOW, s.num_joints)
-        for i in range(s.num_joints):
+        input = Input(TRAJ_WINDOW, skeleton.num_joints)
+        for i in range(skeleton.num_joints):
             input.j_pos[i] = glm.vec3(xforms[i][3][0], xforms[i][3][1], xforms[i][3][2])
 
         inputs.append(input)
 
         if pop_check and frame > 0:
             POP_THRESH = 1
-            for i in range(s.num_joints):
+            for i in range(skeleton.num_joints):
                 prev_pos = inputs[frame - 1].j_pos[i]
                 curr_pos = inputs[frame].j_pos[i]
                 prev = glm.vec3(prev_pos[0], prev_pos[1], prev_pos[2])
                 curr = glm.vec3(curr_pos[0], curr_pos[1], curr_pos[2])
                 delta = curr - prev
                 if math.sqrt(glm.dot(delta, delta)) > POP_THRESH:
-                    print(f"POP frame = {frame}, joint = {s.get_joint_name(i)}")
+                    print(f"POP frame = {frame}, joint = {skeleton.get_joint_name(i)}")
                     print(f"    prev = {prev}")
                     print(f"    curr = {curr}")
+                    #build_xforms_at_frame(bvh, skeleton, frame - 1, True)
+                    #build_xforms_at_frame(bvh, skeleton, frame, True)
 
-
-
-
-
-    return s, inputs
+    return skeleton, inputs
