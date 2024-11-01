@@ -24,16 +24,6 @@ def quat_to_mat4(quat):
     )
 
 
-# TODO: remove
-def quat_mul(lhs, rhs):
-    return glm.quat(
-        -lhs.x * rhs.x - lhs.y * rhs.y - lhs.z * rhs.z + lhs.w * rhs.w,
-        lhs.x * rhs.w + lhs.y * rhs.z - lhs.z * rhs.y + lhs.w * rhs.x,
-        -lhs.x * rhs.z + lhs.y * rhs.w + lhs.z * rhs.x + lhs.w * rhs.y,
-        lhs.x * rhs.y - lhs.y * rhs.x + lhs.z * rhs.w + lhs.w * rhs.z,
-    )
-
-
 class Input:
     def __init__(self, traj_window, num_joints):
         self.t_pos = np.zeros(shape=(traj_window, 2), dtype=float)
@@ -179,7 +169,7 @@ def build_input(bvh):
                     print(f"POP frame = {frame}, joint = {skeleton.get_joint_name(i)}")
                     print(f"    prev = {prev}")
                     print(f"    curr = {curr}")
-                    #build_xforms_at_frame(bvh, skeleton, frame - 1, True)
-                    #build_xforms_at_frame(bvh, skeleton, frame, True)
+                    # build_xforms_at_frame(bvh, skeleton, frame - 1, True)
+                    # build_xforms_at_frame(bvh, skeleton, frame, True)
 
     return skeleton, inputs
