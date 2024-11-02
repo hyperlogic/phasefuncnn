@@ -4,7 +4,8 @@ from tqdm import trange, tqdm
 import sys
 from wgpu.gui.auto import WgpuCanvas, run
 
-cubes = []
+spheres = []
+lines = []
 
 # start_frame = 156
 # end_frame = 158
@@ -28,8 +29,20 @@ def animate():
     if frame >= end_frame or frame >= len(g_inputs):
         frame = start_frame
 
+    VEL_SCALE_FACTOR = 0.1
     for j in range(len(g_inputs[frame].j_pos)):
-        cubes[j].local.position = g_inputs[frame].j_pos[j]
+        pos = g_inputs[frame].j_pos[j]
+        spheres[j].local.position = pos
+        lines[j].local.position = pos
+        vel = glm.vec3(g_inputs[frame].j_vel[j])
+        vel.z = -vel.z  # AJT HACK, there's some kind of left handed coord thing going on with lines... wtf.
+        speed = glm.length(vel)
+        if speed > 0.1:
+            lines[j].local.rotation = glm.quatLookAt(glm.normalize(vel), glm.vec3(0, 1, 0))
+            lines[j].local.scale = speed * VEL_SCALE_FACTOR
+        else:
+            lines[j].local.rotation = glm.quat()
+            lines[j].local.scale = 0.1
 
     global renderer, canvas, scene, camera, controller
 
@@ -53,7 +66,6 @@ def visualize_input(skeleton, inputs):
     global g_inputs
     g_inputs = inputs
 
-    # add a cube for each j_pos in input
     print("building scene")
 
     joint_colors = ["#ffffff" for j in range(skeleton.num_joints)]
@@ -63,18 +75,26 @@ def visualize_input(skeleton, inputs):
     joint_colors[skeleton.get_joint_index("LeftForeArm")] = "#ffff00"
 
     joint_size = [0.5 for j in range(skeleton.num_joints)]
-    joint_size[skeleton.get_joint_index("Head")] = 3
+    joint_size[skeleton.get_joint_index("Head")] = 1.5
 
-    # build cube for every transform
+    # build sphere for every transform
     for j in range(len(inputs[0].j_pos)):
-        box_size = joint_size[j]
-        cube = gfx.Mesh(
-            gfx.box_geometry(box_size, box_size, box_size),
+        radius = joint_size[j]
+        sphere = gfx.Mesh(
+            gfx.sphere_geometry(radius),
             gfx.MeshPhongMaterial(color=joint_colors[j]),
         )
-        scene.add(cube)
-        cube.local.position = inputs[0].j_pos[j]
-        cubes.append(cube)
+        scene.add(sphere)
+        sphere.local.position = inputs[0].j_pos[j]
+        spheres.append(sphere)
+
+        line = gfx.Line(
+            gfx.Geometry(positions=[[0, 0, 0], [0, 0, -1]]),
+            gfx.LineMaterial(thickness=4.0, color="#ff0000"),
+        )
+        scene.add(line)
+        line.local.position = inputs[0].j_pos[j]
+        lines.append(line)
 
     scene.add(gfx.helpers.AxesHelper(10.0, 0.5))
     scene.add(gfx.helpers.GridHelper(size=100))

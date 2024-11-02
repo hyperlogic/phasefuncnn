@@ -146,8 +146,8 @@ def build_input(bvh):
 
     inputs = []
 
+    # first pass build j_pos
     for frame in trange(num_frames):
-
         xforms = build_xforms_at_frame(bvh, skeleton, frame)
 
         # build j_pos
@@ -171,5 +171,19 @@ def build_input(bvh):
                     print(f"    curr = {curr}")
                     # build_xforms_at_frame(bvh, skeleton, frame - 1, True)
                     # build_xforms_at_frame(bvh, skeleton, frame, True)
+
+    # second pass build j_vel
+    for frame in trange(num_frames):
+        for i in range(skeleton.num_joints):
+            if frame > 0 and frame < num_frames - 2:
+                inputs[frame].j_vel[i] = (glm.vec3(inputs[frame + 1].j_pos[i]) - glm.vec3(inputs[frame - 1].j_pos[i])) / (frame_time * 2)
+            else:
+                inputs[frame].j_vel[i] = [0, 0, 0]
+
+    # AJT HACK REMOVE
+    lookx = glm.quatLookAt(glm.vec3(1, 0, 0), glm.vec3(0, 1, 0))
+    lookz = glm.quatLookAt(glm.vec3(0, 0, -1), glm.vec3(0, 1, 0))
+    print(f"lookx = {lookx}")
+    print(f"lookz = {lookz}")
 
     return skeleton, inputs
