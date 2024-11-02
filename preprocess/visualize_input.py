@@ -22,12 +22,16 @@ camera = None
 canvas = None
 controller = None
 
+playing = True
+
 
 def animate():
     global frame
-    frame = frame + 1
-    if frame >= end_frame or frame >= len(g_inputs):
-        frame = start_frame
+
+    if playing:
+        frame = frame + 1
+        if frame >= end_frame or frame >= len(g_inputs):
+            frame = start_frame
 
     VEL_SCALE_FACTOR = 0.1
     for j in range(len(g_inputs[frame].j_pos)):
@@ -51,8 +55,11 @@ def animate():
 
 
 def on_key_down(event):
+    global playing
     if event.key == "Escape":
         renderer.target.close()
+    elif event.key == " ":
+        playing = not playing
 
 
 def visualize_input(skeleton, inputs):
