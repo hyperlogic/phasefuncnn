@@ -6,27 +6,40 @@ OUTPUT_DIR = "output"
 
 mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
 mocap = [os.path.splitext(os.path.basename(n))[0] for n in mocap_paths]
+xform_targets = [os.path.join(OUTPUT_DIR, m + "_xforms.pkl") for m in mocap] + [
+    os.path.join(OUTPUT_DIR, m + "_skeleton.pkl") for m in mocap
+]
+vel_targets = [os.path.join(OUTPUT_DIR, m + "_vels.pkl") for m in mocap]
+jposdir_targets = [os.path.join(OUTPUT_DIR, m + "_jposdir.pkl") for m in mocap]
 
 
 def task_build_xforms():
     """Convert bvh files to xforms"""
+    code_deps = [__file__, "bvh_to_xforms.py", "mocap/build_xforms.py"]
     return {
-        "file_dep": ["bvh_to_xforms.py", "mocap/build_xforms.py"] + mocap_paths,
-        "targets": (
-            [os.path.join(OUTPUT_DIR, m + "_xforms.pkl") for m in mocap]
-            + [os.path.join(OUTPUT_DIR, m + "_skeleton.pkl") for m in mocap]
-        ),
-        "actions": [CmdAction(f"python bvh_to_xforms.py {p}", buffering=1) for p in mocap_paths],
+        "file_dep": code_deps + mocap_paths,
+        "targets": xform_targets,
+        "actions": [
+            CmdAction(f"python bvh_to_xforms.py {p}", buffering=1) for p in mocap_paths
+        ],
     }
 
 
 def task_build_vels():
     """Convert xforms to velocities"""
+    code_deps = [__file__, "xforms_to_vels.py", "mocap/build_vels.py"]
     return {
-        "file_dep": (
-            [os.path.join(OUTPUT_DIR, m + "_xforms.pkl") for m in mocap]
-            + [os.path.join(OUTPUT_DIR, m + "_skeleton.pkl") for m in mocap]
-        ),
-        "targets": [os.path.join(OUTPUT_DIR, m + "_vels.pkl") for m in mocap],
+        "file_dep": code_deps + xform_targets,
+        "targets": vel_targets,
         "actions": [f"python xforms_to_vels.py {m}" for m in mocap],
+    }
+
+
+def task_build_jposdir():
+    """Convert xforms to joint positions and dirs relative to root motion (jposdir)"""
+    code_deps = [__file__, "xforms_to_jposdir.py", "mocap/build_jposdir.py"]
+    return {
+        "file_dep": code_deps + vel_targets,
+        "targets": jposdir_targets,
+        "actions": [f"python xforms_to_jposdir.py {m}" for m in mocap],
     }

@@ -7,29 +7,34 @@ from tqdm import trange, tqdm
 OUTPUT_DIR = "output"
 
 
-def build_vels_at_frame(skeleton, xforms, frame):
+def build_jpos_and_jdir_at_frame(skeleton, xforms, frame):
 
-    v = [glm.vec3(0, 0, 0) for i in range(skeleton.num_joints)]
+    jpos = [glm.vec3(0, 0, 0) for i in range(skeleton.num_joints)]
+    jdir = [glm.vec3(1, 0, 0) for i in range(skeleton.num_joints)]
 
-    t = skeleton.frame_time * 2
-
+    # AJT TODO
+    """
     if frame > 0 and frame < skeleton.num_frames - 1:
         for i in range(skeleton.num_joints):
             dist = glm.vec3(xforms[frame - 1][i][3]) - glm.vec3(xforms[frame + 1][i][3])
             v[i] = dist / t
+    """
 
-    return v
+    return jpos, jdir
 
 
-def build_vels(skeleton, xforms):
+def build_jposdir(skeleton, xforms):
     num_frames = skeleton.num_frames
     frame_time = skeleton.frame_time
 
-    vels = []
+    jpos_list = []
+    jdir_list = []
     for frame in trange(num_frames):
-        vels.append(build_vels_at_frame(skeleton, xforms, frame))
+        jpos, jdir = build_jpos_and_jdir_at_frame(skeleton, xforms, frame)
+        jpos_list.append(jpos_list)
+        jdir_list.append(jdir_list)
 
-    return vels
+    return jpos_list, jdir_list
 
 
 if __name__ == "__main__":
@@ -39,7 +44,7 @@ if __name__ == "__main__":
 
     mocap_basename = sys.argv[1]
 
-    # unpickle skeleton, xforms
+    # unpickle
     skeleton = mocap.unpickle_obj(
         os.path.join(OUTPUT_DIR, mocap_basename + "_skeleton.pkl")
     )
@@ -47,7 +52,8 @@ if __name__ == "__main__":
         os.path.join(OUTPUT_DIR, mocap_basename + "_xforms.pkl")
     )
 
-    vels = build_vels(skeleton, xforms)
+    jpos, jdir = build_jposdir(skeleton, xforms)
 
-    # pickle vels
-    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_vels.pkl"), vels)
+    # pickle jpos & jdir
+    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_jpos.pkl"), jpos)
+    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_jdir.pkl"), jdir)
