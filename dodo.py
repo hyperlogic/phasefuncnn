@@ -15,31 +15,31 @@ jposdir_targets = [os.path.join(OUTPUT_DIR, m + "_jposdir.pkl") for m in mocap]
 
 def task_build_xforms():
     """Convert bvh files to xforms"""
-    code_deps = [__file__, "bvh_to_xforms.py", "mocap/build_xforms.py"]
+    code_deps = [__file__, "build_xforms.py"]
     return {
         "file_dep": code_deps + mocap_paths,
         "targets": xform_targets,
         "actions": [
-            CmdAction(f"python bvh_to_xforms.py {p}", buffering=1) for p in mocap_paths
+            CmdAction(f"python build_xforms.py {p}", buffering=1) for p in mocap_paths
         ],
     }
 
 
 def task_build_vels():
     """Convert xforms to velocities"""
-    code_deps = [__file__, "xforms_to_vels.py", "mocap/build_vels.py"]
+    code_deps = [__file__, "build_vels.py"]
     return {
         "file_dep": code_deps + xform_targets,
         "targets": vel_targets,
-        "actions": [f"python xforms_to_vels.py {m}" for m in mocap],
+        "actions": [f"python build_vels.py {m}" for m in mocap],
     }
 
 
 def task_build_jposdir():
     """Convert xforms to joint positions and dirs relative to root motion (jposdir)"""
-    code_deps = [__file__, "xforms_to_jposdir.py", "mocap/build_jposdir.py"]
+    code_deps = [__file__, "build_jposdir.py"]
     return {
         "file_dep": code_deps + vel_targets,
         "targets": jposdir_targets,
-        "actions": [f"python xforms_to_jposdir.py {m}" for m in mocap],
+        "actions": [f"python build_jposdir.py {m}" for m in mocap],
     }
