@@ -8,3 +8,6 @@ venv/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# output dir
+output/
