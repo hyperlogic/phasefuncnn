@@ -3,3 +3,4 @@ pyglm
 glfw
 tqdm
 pygfx
+doit

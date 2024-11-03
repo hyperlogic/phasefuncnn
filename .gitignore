@@ -9,5 +9,8 @@ venv/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# doit db
+.doit.db*
+
 # output dir
 output/
