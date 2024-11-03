@@ -63,6 +63,55 @@ def build_xforms(bvh, skeleton):
     return xforms
 
 
+def build_rpos_rdir_at_frame(skeleton, xforms, frame):
+    lhip_i = skeleton.get_joint_index("LeftUpLeg")
+    rhip_i = skeleton.get_joint_index("RightUpLeg")
+    lsho_i = skeleton.get_joint_index("LeftArm")
+    rsho_i = skeleton.get_joint_index("RightArm")
+    assert lhip_i != -1 and rhip_i != -1 and lsho_i != -1 and rsho_i != -1
+
+    lhip = glm.vec3(xforms[frame][lhip_i][3])
+    rhip = glm.vec3(xforms[frame][rhip_i][3])
+    lsho = glm.vec3(xforms[frame][lsho_i][3])
+    rsho = glm.vec3(xforms[frame][rsho_i][3])
+
+    hip = rhip - lhip
+    hip_len = glm.length(hip)
+    sho = rsho - lsho
+    sho_len = glm.length(sho)
+
+    assert(hip_len > 0 and sho_len > 0)  # hip joints or shoulder joints are coincident!
+
+    # compute root facing dir by averaging the vectors between the two hip joints and the two shoulder joints
+    # then take that avg and cross it with the up vector.
+    avg = (hip / hip_len + sho / sho_len) / 2
+    up = glm.vec3(0, 1, 0)
+    facing = glm.cross(avg, up)
+
+    # compute root position by averging the two hip joints
+    hip_center = (rhip + lhip) / 2
+
+    # project both of these onto the ground plane
+    rpos = glm.vec2(hip_center.x, hip_center.z)
+    rdir = glm.vec2(facing.x, facing.z)
+
+    assert glm.length(rdir) > 0  # bad facing dir
+
+    return rpos, glm.normalize(rdir)
+
+
+def build_root_motion(skeleton, xforms):
+    rpos_list = []
+    rdir_list = []
+    for frame in range(skeleton.num_frames):
+        rpos, rdir = build_rpos_rdir_at_frame(skeleton, xforms, frame)
+        rpos_list.append(rpos)
+        rdir_list.append(rdir)
+
+    # AJT: TODO: filter rdir_list
+    return rpos_list, rdir_list
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Error: expected bvh file argument")
@@ -79,6 +128,7 @@ if __name__ == "__main__":
     print(skeleton.joint_names)
 
     xforms = build_xforms(bvh, skeleton)
+    rpos_list, rdir_list = build_root_motion(skeleton, xforms)
 
     # create output dir
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -88,3 +138,5 @@ if __name__ == "__main__":
         os.path.join(OUTPUT_DIR, mocap_basename + "_skeleton.pkl"), skeleton
     )
     mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_xforms.pkl"), xforms)
+    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_rpos.pkl"), rpos_list)
+    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_rdir.pkl"), rdir_list)

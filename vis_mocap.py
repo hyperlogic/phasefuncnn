@@ -10,17 +10,26 @@ from wgpu.gui.auto import WgpuCanvas, run
 OUTPUT_DIR = "output"
 
 
+# rot from b to a
+def quat_dir(a, b):
+    dot = glm.dot(b, a)
+    cross = glm.cross(b, a)
+    return glm.normalize(1 + dot, cross.x, cross.y, cross.z)
+
+
 class RenderBuddy:
-    def __init__(self, skeleton, xforms):
+    def __init__(self, skeleton, xforms, rpos, rdir):
 
         self.start_frame = 0
         self.end_frame = sys.maxsize
         self.curr_frame = self.start_frame
         self.playing = True
 
-        self.spheres = []
+
         self.skeleton = skeleton
         self.xforms = xforms
+        self.rpos = rpos
+        self.rdir = rdir
 
         self.scene = gfx.Scene()
         self.scene.add(gfx.AmbientLight(intensity=1))
@@ -29,6 +38,7 @@ class RenderBuddy:
         self.scene.add(gfx.helpers.GridHelper(size=100))
 
         # build sphere for every transform
+        self.spheres = []
         for j in range(skeleton.num_joints):
             radius = 0.5
             sphere = gfx.Mesh(
@@ -47,6 +57,28 @@ class RenderBuddy:
             camera=self.camera, register_events=self.renderer
         )
 
+        # draw a disc under the root position.
+        self.root_sphere = gfx.Mesh(
+            gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#aaaaff")
+        )
+        rpos = self.rpos[0]
+        self.root_sphere.local.position = glm.vec3(rpos.x, 0, rpos.y)
+        self.root_sphere.local.scale = glm.vec3(2, 0.01, 2)
+        self.scene.add(self.root_sphere)
+
+        # draw a line for the root facing dir
+        self.root_line = gfx.Line(
+            gfx.Geometry(positions=[[0, 0, 0], [-1, 0, 0]]),
+            gfx.LineMaterial(thickness=4.0, color="#ff0000"),
+        )
+        self.root_line.local.position = glm.vec3(rpos.x, 0, rpos.y)
+        self.root_line.local.scale = 5
+        rdir = self.rdir[0]
+        x_axis = glm.vec3(1, 0, 0)
+        self.root_line.local.rotation = glm.quat(glm.vec3(rdir.x, 0, rdir.y), x_axis)
+        self.scene.add(self.root_line)
+
+
         self.renderer.add_event_handler(
             lambda event: self.on_key_down(event), "key_down"
         )
@@ -63,8 +95,19 @@ class RenderBuddy:
             pos = glm.vec3(self.xforms[self.curr_frame][j][3])
             self.spheres[j].local.position = pos
 
+        # update root_sphere
+        rpos = self.rpos[self.curr_frame]
+        self.root_sphere.local.position = glm.vec3(rpos.x, 0, rpos.y)
+
+        # update root_line
+        self.root_line.local.position = glm.vec3(rpos.x, 0, rpos.y)
+        rdir = self.rdir[self.curr_frame]
+        x_axis = glm.vec3(1, 0, 0)
+        self.root_line.local.rotation = glm.quat(glm.vec3(rdir.x, 0, rdir.y), x_axis)
+
         self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw()
+
 
     def on_key_down(self, event):
         if event.key == "Escape":
@@ -80,15 +123,11 @@ if __name__ == "__main__":
 
     mocap_basename = sys.argv[1]
 
-    # unpickle skeleton
-    skeleton_filename = os.path.join(OUTPUT_DIR, mocap_basename + "_skeleton.pkl")
-    with open(skeleton_filename, "rb") as f:
-        skeleton = pickle.load(f)
+    # unpickle skeleton, xforms, rpos, rdir
+    skeleton = mocap.unpickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_skeleton.pkl"))
+    xforms = mocap.unpickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_xforms.pkl"))
+    rpos = mocap.unpickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_rpos.pkl"))
+    rdir = mocap.unpickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_rdir.pkl"))
 
-    # unpickle xforms
-    xforms_filename = os.path.join(OUTPUT_DIR, mocap_basename + "_xforms.pkl")
-    with open(xforms_filename, "rb") as f:
-        xforms = pickle.load(f)
-
-    renderBuddy = RenderBuddy(skeleton, xforms)
+    renderBuddy = RenderBuddy(skeleton, xforms, rpos, rdir)
     run()

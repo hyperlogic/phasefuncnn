@@ -6,9 +6,13 @@ OUTPUT_DIR = "output"
 
 mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
 mocap = [os.path.splitext(os.path.basename(n))[0] for n in mocap_paths]
-xform_targets = [os.path.join(OUTPUT_DIR, m + "_xforms.pkl") for m in mocap] + [
-    os.path.join(OUTPUT_DIR, m + "_skeleton.pkl") for m in mocap
-]
+xform_targets = (
+    [os.path.join(OUTPUT_DIR, m + "_xforms.pkl") for m in mocap]
+    + [os.path.join(OUTPUT_DIR, m + "_skeleton.pkl") for m in mocap]
+    + [os.path.join(OUTPUT_DIR, m + "_rpos.pkl") for m in mocap]
+    + [os.path.join(OUTPUT_DIR, m + "_rdir.pkl") for m in mocap]
+)
+
 vel_targets = [os.path.join(OUTPUT_DIR, m + "_vels.pkl") for m in mocap]
 jposdir_targets = [os.path.join(OUTPUT_DIR, m + "_jposdir.pkl") for m in mocap]
 
