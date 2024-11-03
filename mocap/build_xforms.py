@@ -1,6 +1,4 @@
 import glm
-import math
-import numpy as np
 from tqdm import trange, tqdm
 
 

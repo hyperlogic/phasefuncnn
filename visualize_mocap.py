@@ -80,8 +80,6 @@ if __name__ == "__main__":
 
     mocap_basename = sys.argv[1]
 
-    global skeleton, xforms
-
     # unpickle skeleton
     skeleton_filename = os.path.join(OUTPUT_DIR, mocap_basename + "_skeleton.pkl")
     with open(skeleton_filename, "rb") as f:
