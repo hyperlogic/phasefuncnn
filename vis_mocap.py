@@ -1,5 +1,6 @@
 import glm
 import mocap
+import numpy as np
 import os
 import pickle
 import pygfx as gfx
@@ -11,7 +12,7 @@ OUTPUT_DIR = "output"
 
 
 class RenderBuddy:
-    def __init__(self, skeleton, xforms, root):
+    def __init__(self, skeleton, xforms, root, jointpva):
 
         self.start_frame = 0
         self.end_frame = sys.maxsize
@@ -28,16 +29,30 @@ class RenderBuddy:
         self.scene.add(gfx.helpers.AxesHelper(10.0, 0.5))
         self.scene.add(gfx.helpers.GridHelper(size=100))
 
+
+        # draw a disc under the root position.
+        self.root_group = gfx.helpers.AxesHelper(10.0, 0.5)# gfx.Group()
+
+        print(f"root[0] = {self.root[0]}")
+        self.root_group.local.position = glm.vec3(self.root[0][3])
+        self.root_group.local.rotation = glm.quat(self.root[0])
+        self.scene.add(self.root_group)
+        self.root_sphere = gfx.Mesh(
+            gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#aaaaff")
+        )
+        self.root_sphere.local.scale = glm.vec3(2, 0.01, 2)
+        self.root_group.add(self.root_sphere)
+
         # build sphere for every transform
         self.spheres = []
-        for j in range(skeleton.num_joints):
+        for i in range(skeleton.num_joints):
             radius = 0.5
             sphere = gfx.Mesh(
                 gfx.sphere_geometry(radius), gfx.MeshPhongMaterial(color="#ffffff")
             )
-            self.scene.add(sphere)
-            sphere.local.position = glm.vec3(xforms[0][j][3])
+            sphere.local.position = glm.vec3(jointpva[0][i][0], jointpva[0][i][1], jointpva[0][i][2])
             self.spheres.append(sphere)
+            self.root_group.add(sphere)
 
         self.camera = gfx.PerspectiveCamera(70, 4 / 3)
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
@@ -48,13 +63,6 @@ class RenderBuddy:
             camera=self.camera, register_events=self.renderer
         )
 
-        # draw a disc under the root position.
-        self.root_sphere = gfx.Mesh(
-            gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#aaaaff")
-        )
-        self.root_sphere.local.position = glm.vec3(self.root[0][3])
-        self.root_sphere.local.scale = glm.vec3(2, 0.01, 2)
-        self.scene.add(self.root_sphere)
 
         # draw a line for the root facing dir
         self.root_line = gfx.Line(
@@ -78,17 +86,23 @@ class RenderBuddy:
             if self.curr_frame >= self.end_frame or self.curr_frame >= len(self.xforms):
                 self.curr_frame = self.start_frame
 
+        """
         for j in range(self.skeleton.num_joints):
             pos = glm.vec3(self.xforms[self.curr_frame][j][3])
             self.spheres[j].local.position = pos
+        """
 
-        # update root_sphere
-        rpos = glm.vec3(self.root[self.curr_frame][3])
-        self.root_sphere.local.position = rpos
+        # update root_group
+        """
+        root_pos = glm.vec3(self.root[self.curr_frame][3])
+        root_rot = glm.quat(self.root[self.curr_frame])
+        self.root_group.local.position = root_pos
+        self.root_group.local.rotation = root_rot
 
         # update root_line
-        self.root_line.local.position = rpos
-        self.root_line.local.rotation = glm.quat(self.root[self.curr_frame])
+        self.root_line.local.position = root_pos
+        self.root_line.local.rotation = root_rot
+        """
 
         self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw()
@@ -108,10 +122,11 @@ if __name__ == "__main__":
     mocap_basename = sys.argv[1]
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
-    # unpickle skeleton, xforms, rpos, rdir
+    # unpickle skeleton, xforms, jointpva
     skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
     xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
     root = mocap.unpickle_obj(outbasepath + "_root.pkl")
+    jointpva = np.load(outbasepath + "_jointpva.npy")
 
-    renderBuddy = RenderBuddy(skeleton, xforms, root)
+    renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva)
     run()
