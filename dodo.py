@@ -14,7 +14,7 @@ xform_targets = (
 )
 
 vel_targets = [os.path.join(OUTPUT_DIR, m + "_vels.pkl") for m in mocap]
-jposdir_targets = [os.path.join(OUTPUT_DIR, m + "_jposdir.pkl") for m in mocap]
+jposdir_targets = [os.path.join(OUTPUT_DIR, m + "_jpos.pkl") for m in mocap] + [os.path.join(OUTPUT_DIR, m + "_jdir.pkl") for m in mocap]
 
 
 def task_build_xforms():
@@ -26,6 +26,7 @@ def task_build_xforms():
         "actions": [
             CmdAction(f"python build_xforms.py {p}", buffering=1) for p in mocap_paths
         ],
+        "clean": True
     }
 
 
@@ -36,6 +37,7 @@ def task_build_vels():
         "file_dep": code_deps + xform_targets,
         "targets": vel_targets,
         "actions": [f"python build_vels.py {m}" for m in mocap],
+        "clean": True
     }
 
 
@@ -46,4 +48,5 @@ def task_build_jposdir():
         "file_dep": code_deps + vel_targets,
         "targets": jposdir_targets,
         "actions": [f"python build_jposdir.py {m}" for m in mocap],
+        "clean": True
     }
