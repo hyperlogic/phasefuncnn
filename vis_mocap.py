@@ -10,13 +10,6 @@ from wgpu.gui.auto import WgpuCanvas, run
 OUTPUT_DIR = "output"
 
 
-# rot from b to a
-def quat_dir(a, b):
-    dot = glm.dot(b, a)
-    cross = glm.cross(b, a)
-    return glm.normalize(1 + dot, cross.x, cross.y, cross.z)
-
-
 class RenderBuddy:
     def __init__(self, skeleton, xforms, root):
 
@@ -113,15 +106,12 @@ if __name__ == "__main__":
         exit(1)
 
     mocap_basename = sys.argv[1]
+    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
     # unpickle skeleton, xforms, rpos, rdir
-    skeleton = mocap.unpickle_obj(
-        os.path.join(OUTPUT_DIR, mocap_basename + "_skeleton.pkl")
-    )
-    xforms = mocap.unpickle_obj(
-        os.path.join(OUTPUT_DIR, mocap_basename + "_xforms.pkl")
-    )
-    root = mocap.unpickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_root.pkl"))
+    skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
+    xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
+    root = mocap.unpickle_obj(outbasepath + "_root.pkl")
 
     renderBuddy = RenderBuddy(skeleton, xforms, root)
     run()

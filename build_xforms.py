@@ -1,3 +1,7 @@
+#
+# Build world space transform matrices for each joint and root motion, from a bvh file
+#
+
 from bvh import Bvh
 import glm
 import math
@@ -120,6 +124,7 @@ if __name__ == "__main__":
 
     mocap_filename = sys.argv[1]
     mocap_basename = os.path.splitext(os.path.basename(mocap_filename))[0]
+    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
     print(f"Loading {mocap_filename}")
     with open(mocap_filename) as f:
@@ -135,8 +140,6 @@ if __name__ == "__main__":
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # pickle skeleton, xforms
-    mocap.pickle_obj(
-        os.path.join(OUTPUT_DIR, mocap_basename + "_skeleton.pkl"), skeleton
-    )
-    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_xforms.pkl"), xforms)
-    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_root.pkl"), root_list)
+    mocap.pickle_obj(outbasepath + "_skeleton.pkl", skeleton)
+    mocap.pickle_obj(outbasepath + "_xforms.pkl", xforms)
+    mocap.pickle_obj(outbasepath + "_root.pkl", root_list)
