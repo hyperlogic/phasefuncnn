@@ -1,5 +1,6 @@
 from bvh import Bvh
 import glm
+import math
 import mocap
 import os
 import sys
@@ -63,7 +64,7 @@ def build_xforms(bvh, skeleton):
     return xforms
 
 
-def build_rpos_rdir_at_frame(skeleton, xforms, frame):
+def build_root_at_frame(skeleton, xforms, frame):
     lhip_i = skeleton.get_joint_index("LeftUpLeg")
     rhip_i = skeleton.get_joint_index("RightUpLeg")
     lsho_i = skeleton.get_joint_index("LeftArm")
@@ -80,7 +81,7 @@ def build_rpos_rdir_at_frame(skeleton, xforms, frame):
     sho = rsho - lsho
     sho_len = glm.length(sho)
 
-    assert(hip_len > 0 and sho_len > 0)  # hip joints or shoulder joints are coincident!
+    assert hip_len > 0 and sho_len > 0  # hip joints or shoulder joints are coincident!
 
     # compute root facing dir by averaging the vectors between the two hip joints and the two shoulder joints
     # then take that avg and cross it with the up vector.
@@ -91,25 +92,25 @@ def build_rpos_rdir_at_frame(skeleton, xforms, frame):
     # compute root position by averging the two hip joints
     hip_center = (rhip + lhip) / 2
 
-    # project both of these onto the ground plane
-    rpos = glm.vec2(hip_center.x, hip_center.z)
-    rdir = glm.vec2(facing.x, facing.z)
+    # project both onto the ground plane
+    root_pos = glm.vec3(hip_center.x, 0, hip_center.z)
+    assert glm.length(glm.vec2(facing.x, facing.z)) > 0  # bad facing dir
+    root_theta = math.atan2(facing.z, facing.x)
 
-    assert glm.length(rdir) > 0  # bad facing dir
+    root = glm.mat4(glm.angleAxis(root_theta, glm.vec3(0, 1, 0)))
+    root[3] = glm.vec4(root_pos, 1)
 
-    return rpos, glm.normalize(rdir)
+    return root
 
 
 def build_root_motion(skeleton, xforms):
-    rpos_list = []
-    rdir_list = []
+    root_list = []
     for frame in range(skeleton.num_frames):
-        rpos, rdir = build_rpos_rdir_at_frame(skeleton, xforms, frame)
-        rpos_list.append(rpos)
-        rdir_list.append(rdir)
+        root = build_root_at_frame(skeleton, xforms, frame)
+        root_list.append(root)
 
-    # AJT: TODO: filter rdir_list
-    return rpos_list, rdir_list
+    # AJT: TODO: filter rotations
+    return root_list
 
 
 if __name__ == "__main__":
@@ -128,7 +129,7 @@ if __name__ == "__main__":
     print(skeleton.joint_names)
 
     xforms = build_xforms(bvh, skeleton)
-    rpos_list, rdir_list = build_root_motion(skeleton, xforms)
+    root_list = build_root_motion(skeleton, xforms)
 
     # create output dir
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -138,5 +139,4 @@ if __name__ == "__main__":
         os.path.join(OUTPUT_DIR, mocap_basename + "_skeleton.pkl"), skeleton
     )
     mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_xforms.pkl"), xforms)
-    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_rpos.pkl"), rpos_list)
-    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_rdir.pkl"), rdir_list)
+    mocap.pickle_obj(os.path.join(OUTPUT_DIR, mocap_basename + "_root.pkl"), root_list)
