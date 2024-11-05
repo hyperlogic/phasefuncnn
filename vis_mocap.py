@@ -10,6 +10,9 @@ from wgpu.gui.auto import WgpuCanvas, run
 
 OUTPUT_DIR = "output"
 
+def quat_swizzle(quat):
+    return [quat.x, quat.y, quat.z, quat.w]
+
 
 class RenderBuddy:
     def __init__(self, skeleton, xforms, root, jointpva):
@@ -31,12 +34,11 @@ class RenderBuddy:
 
 
         # draw a disc under the root position.
-        self.root_group = gfx.helpers.AxesHelper(10.0, 0.5)# gfx.Group()
-
-        print(f"root[0] = {self.root[0]}")
+        self.root_group = gfx.helpers.AxesHelper(10.0, 1.0)# gfx.Group()
         self.root_group.local.position = glm.vec3(self.root[0][3])
         self.root_group.local.rotation = glm.quat(self.root[0])
         self.scene.add(self.root_group)
+
         self.root_sphere = gfx.Mesh(
             gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#aaaaff")
         )
@@ -48,9 +50,10 @@ class RenderBuddy:
         for i in range(skeleton.num_joints):
             radius = 0.5
             sphere = gfx.Mesh(
-                gfx.sphere_geometry(radius), gfx.MeshPhongMaterial(color="#ffffff")
+                gfx.box_geometry(radius, radius, radius), gfx.MeshPhongMaterial(color="#ffffff")
             )
-            sphere.local.position = glm.vec3(jointpva[0][i][0], jointpva[0][i][1], jointpva[0][i][2])
+            sphere.local.position = jointpva[0][i][0:3]
+            sphere.local.rotation = mocap.expmap(glm.vec3(jointpva[0][i][3:6]))
             self.spheres.append(sphere)
             self.root_group.add(sphere)
 
@@ -62,17 +65,6 @@ class RenderBuddy:
         self.controller = gfx.OrbitController(
             camera=self.camera, register_events=self.renderer
         )
-
-
-        # draw a line for the root facing dir
-        self.root_line = gfx.Line(
-            gfx.Geometry(positions=[[0, 0, 0], [-1, 0, 0]]),
-            gfx.LineMaterial(thickness=4.0, color="#ff0000"),
-        )
-        self.root_line.local.position = glm.vec3(self.root[0][3])
-        self.root_line.local.scale = 5
-        self.root_line.local.rotation = glm.quat(self.root[0])
-        self.scene.add(self.root_line)
 
         self.renderer.add_event_handler(
             lambda event: self.on_key_down(event), "key_down"
@@ -86,23 +78,15 @@ class RenderBuddy:
             if self.curr_frame >= self.end_frame or self.curr_frame >= len(self.xforms):
                 self.curr_frame = self.start_frame
 
-        """
-        for j in range(self.skeleton.num_joints):
-            pos = glm.vec3(self.xforms[self.curr_frame][j][3])
-            self.spheres[j].local.position = pos
-        """
+        for i in range(self.skeleton.num_joints):
+            self.spheres[i].local.position = jointpva[self.curr_frame][i][0:3]
+            self.spheres[i].local.rotation = mocap.expmap(glm.vec3(jointpva[self.curr_frame][i][3:6]))
 
         # update root_group
-        """
         root_pos = glm.vec3(self.root[self.curr_frame][3])
         root_rot = glm.quat(self.root[self.curr_frame])
         self.root_group.local.position = root_pos
         self.root_group.local.rotation = root_rot
-
-        # update root_line
-        self.root_line.local.position = root_pos
-        self.root_line.local.rotation = root_rot
-        """
 
         self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw()
