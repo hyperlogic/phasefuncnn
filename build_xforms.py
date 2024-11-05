@@ -80,9 +80,9 @@ def build_root_at_frame(skeleton, xforms, frame):
     lsho = glm.vec3(xforms[frame][lsho_i][3])
     rsho = glm.vec3(xforms[frame][rsho_i][3])
 
-    hip = rhip - lhip
+    hip = lhip - rhip
     hip_len = glm.length(hip)
-    sho = rsho - lsho
+    sho = lsho - rsho
     sho_len = glm.length(sho)
 
     assert hip_len > 0 and sho_len > 0  # hip joints or shoulder joints are coincident!
@@ -99,8 +99,11 @@ def build_root_at_frame(skeleton, xforms, frame):
     # project both onto the ground plane
     root_pos = glm.vec3(hip_center.x, 0, hip_center.z)
     assert glm.length(glm.vec2(facing.x, facing.z)) > 0  # bad facing dir
-    root_theta = math.atan2(facing.z, facing.x)
 
+    # the negative is because cross(x, z) is the negative y axis and we want to rot around the y axis
+    root_theta = -math.atan2(facing.z, facing.x)
+
+    # build matrix
     root = glm.mat4(glm.angleAxis(root_theta, glm.vec3(0, 1, 0)))
     root[3] = glm.vec4(root_pos, 1)
 
