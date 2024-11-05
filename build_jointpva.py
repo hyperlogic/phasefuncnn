@@ -13,10 +13,8 @@ from tqdm import trange, tqdm
 OUTPUT_DIR = "output"
 
 
-def build_jointpva_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
+def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
     num_joints = skeleton.num_joints
-    num_frames = skeleton.num_frames
-    t = skeleton.frame_time * 2
     for i in range(num_joints):
         local_xform = inv_root[frame] * xforms[frame][i]
 
@@ -31,22 +29,27 @@ def build_jointpva_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
         jointpva_array[frame][i][7] = exp[1]
         jointpva_array[frame][i][8] = exp[2]
 
-    # velocties
+
+def build_jointv_at_frame(skeleton, frame, jointpva_array):
+    num_joints = skeleton.num_joints
+    num_frames = skeleton.num_frames
+    t = skeleton.frame_time * 2
     for i in range(num_joints):
+        # velocties
         if frame > 0 and frame < num_frames - 1:
             jointpva_array[frame][i][3] = (
-                jointpva_array[frame - 1][i][0] - jointpva_array[frame + 1][i][0]
+                jointpva_array[frame + 1][i][0] - jointpva_array[frame - 1][i][0]
             ) / t
             jointpva_array[frame][i][4] = (
-                jointpva_array[frame - 1][i][1] - jointpva_array[frame + 1][i][1]
+                jointpva_array[frame + 1][i][1] - jointpva_array[frame - 1][i][1]
             ) / t
             jointpva_array[frame][i][5] = (
-                jointpva_array[frame - 1][i][2] - jointpva_array[frame + 1][i][2]
+                jointpva_array[frame + 1][i][2] - jointpva_array[frame - 1][i][2]
             ) / t
         else:
             jointpva_array[frame][i][3] = 0
             jointpva_array[frame][i][4] = 0
-            jointpva_array[frame][i][6] = 0
+            jointpva_array[frame][i][5] = 0
 
 
 def build_jointpva(skeleton, xforms, root):
@@ -54,8 +57,10 @@ def build_jointpva(skeleton, xforms, root):
     num_frames = skeleton.num_frames
     inv_root = [glm.inverse(m) for m in root]
     jointpva_array = np.zeros((num_frames, num_joints, 9))
-    for frame in trange(num_frames):
-        build_jointpva_at_frame(skeleton, xforms, inv_root, frame, jointpva_array)
+    for frame in range(num_frames):
+        build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array)
+    for frame in range(num_frames):
+        build_jointv_at_frame(skeleton, frame, jointpva_array)
     return jointpva_array
 
 

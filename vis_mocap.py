@@ -14,6 +14,15 @@ OUTPUT_DIR = "output"
 def quat_swizzle(quat):
     return [quat[1], quat[2], quat[3], quat[0]]
 
+def orient_line_from_pv(line, pos, vel):
+    line.local.position = pos
+    speed = glm.length(vel)
+    if speed > 1e-6:
+        line.local.rotation = quat_swizzle(glm.quat(glm.vec3(1, 0, 0), vel / speed))
+    else:
+        line.local.rotation = quat_swizzle(glm.quat())
+    SCALE_FACTOR = 0.1
+    line.local.scale = max(speed * SCALE_FACTOR, 0.01)
 
 class RenderBuddy:
     def __init__(self, skeleton, xforms, root, jointpva):
@@ -51,20 +60,30 @@ class RenderBuddy:
         joint_colors["RightUpLeg"] = "#ff0000"
         joint_colors["LeftArm"] = "#0000ff"
         joint_colors["RightArm"] = "#ff0000"
-        self.spheres = []
+        self.joint_mesh = []
+        self.joint_vels = []
         for i in range(skeleton.num_joints):
             joint_name = skeleton.get_joint_name(i)
             radius = 0.5
-            sphere = gfx.Mesh(
+            mesh = gfx.Mesh(
                 gfx.box_geometry(radius, radius, radius),
                 gfx.MeshPhongMaterial(color=joint_colors[joint_name]),
             )
-            sphere.local.position = jointpva[0][i][0:3]
-            sphere.local.rotation = quat_swizzle(
+            mesh.local.position = jointpva[0][i][0:3]
+            mesh.local.rotation = quat_swizzle(
                 mocap.expmap(glm.vec3(jointpva[0][i][6:9]))
             )
-            self.spheres.append(sphere)
-            self.root_group.add(sphere)
+            self.joint_mesh.append(mesh)
+            self.root_group.add(mesh)
+
+            line = gfx.Line(
+                gfx.Geometry(positions=[[0, 0, 0], [1, 0, 0]]),
+                gfx.LineMaterial(thickness=2.0, color="#ff0000"),
+            )
+            line.local.position = jointpva[0][i][0:3]
+            line.local.scale = 0.1
+            self.joint_vels.append(line)
+            self.root_group.add(line)
 
         self.camera = gfx.PerspectiveCamera(70, 4 / 3)
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
@@ -88,10 +107,15 @@ class RenderBuddy:
                 self.curr_frame = self.start_frame
 
         for i in range(self.skeleton.num_joints):
-            self.spheres[i].local.position = jointpva[self.curr_frame][i][0:3]
-            self.spheres[i].local.rotation = quat_swizzle(
+            pos = glm.vec3(jointpva[self.curr_frame][i][0:3])
+            rot = quat_swizzle(
                 mocap.expmap(glm.vec3(jointpva[self.curr_frame][i][6:9]))
             )
+            self.joint_mesh[i].local.position = pos
+            self.joint_mesh[i].local.rotation = rot
+
+            vel = glm.vec3(jointpva[self.curr_frame][i][3:6])
+            orient_line_from_pv(self.joint_vels[i], pos, vel)
 
         # update root_group
         root_pos = glm.vec3(self.root[self.curr_frame][3])
