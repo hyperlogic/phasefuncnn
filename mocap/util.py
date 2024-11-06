@@ -34,5 +34,4 @@ def logmap(q):
     if sin_half_angle < 1e-6:
         return glm.vec3(0, 0, 0)
     axis = glm.normalize(glm.vec3(quat.x, quat.y, quat.z))
-
     return angle * axis

@@ -1,5 +1,7 @@
 #
-# Build world space transform matrices for each joint and root motion, from a bvh file
+# Build world space matrices (glm.mat4) for each joint at the given SAMPLE_RATE
+# Also, build the root motion matrices  (glm.mat4) for the character.
+# And output the skeleton for the character (mocap.Skeleton)
 #
 
 from bvh import Bvh
@@ -132,7 +134,9 @@ if __name__ == "__main__":
 
     # sample the mocap data at the desired sample rate
     mocap_sample_rate = round(1 / bvh.frame_time)
-    assert (mocap_sample_rate % SAMPLE_RATE) == 0  # mocap_sample_rate must be a multiple of DESIRED_SAMPLE_RATE
+    assert (
+        mocap_sample_rate % SAMPLE_RATE
+    ) == 0  # mocap_sample_rate must be a multiple of DESIRED_SAMPLE_RATE
     sample_step = int(mocap_sample_rate / SAMPLE_RATE)
 
     skeleton = mocap.Skeleton(bvh)

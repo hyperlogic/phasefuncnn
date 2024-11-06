@@ -1,6 +1,9 @@
 #
-# build root-space position, velocity and angles (pva) for each joint
-#
+# Build root-space position, velocity and angles (pva) for each joint
+# They are packed into a np.ndarray with shape (num_frames, num_joints, 9)
+#   Indices [0:3] are position x, y, z
+#   Indices [3:6] are velocity x, y, z
+#   Indices [6:9] are the joint angles in R^3 form (can use mocap.expmap to convert into a quaternion)
 
 import glm
 import math
