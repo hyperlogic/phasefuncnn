@@ -11,6 +11,7 @@ import sys
 from tqdm import trange, tqdm
 
 OUTPUT_DIR = "output"
+SAMPLE_RATE = 60
 
 
 def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
@@ -32,8 +33,8 @@ def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
 
 def build_jointv_at_frame(skeleton, frame, jointpva_array):
     num_joints = skeleton.num_joints
-    num_frames = skeleton.num_frames
-    t = skeleton.frame_time * 2
+    num_frames = len(jointpva_array)
+    t = (1 / SAMPLE_RATE) * 2
     for i in range(num_joints):
         # velocties
         if frame > 0 and frame < num_frames - 1:
@@ -54,7 +55,7 @@ def build_jointv_at_frame(skeleton, frame, jointpva_array):
 
 def build_jointpva(skeleton, xforms, root):
     num_joints = skeleton.num_joints
-    num_frames = skeleton.num_frames
+    num_frames = len(xforms)
     inv_root = [glm.inverse(m) for m in root]
     jointpva_array = np.zeros((num_frames, num_joints, 9))
     for frame in range(num_frames):

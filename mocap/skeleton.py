@@ -17,8 +17,6 @@ class Skeleton:
         self.parent_map = {j: bvh.joint_parent_index(j) for j in self.joint_names}
         self.joint_offset_map = {j: bvh.joint_offset(j) for j in self.joint_names}
         self.num_joints = len(self.joint_names)
-        self.num_frames = bvh.nframes
-        self.frame_time = bvh.frame_time
 
     def is_root(self, joint_name):
         return joint_name == self.root_name
