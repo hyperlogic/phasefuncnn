@@ -1,0 +1,63 @@
+#
+# Build trajectory for root character motion
+# Each frame contains TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE floats
+# Each element contains pos (x, z) and direction (x, z)
+#
+
+import glm
+import mocap
+import numpy as np
+import os
+import sys
+
+
+OUTPUT_DIR = "output"
+SAMPLE_RATE = 60
+TRAJ_SAMPLE_RATE = 6
+TRAJ_STEP = SAMPLE_RATE / TRAJ_SAMPLE_RATE
+TRAJ_WINDOW_SIZE = 12
+TRAJ_ELEMENT_SIZE = 4  # 4 for px, pz, dx, dz
+
+
+def build_traj_at_frame(root, frame, traj_array):
+    num_frames = len(root)
+    half_window = TRAJ_WINDOW_SIZE / 2
+    start = int(frame - half_window * TRAJ_STEP)
+    end = int(frame + half_window * TRAJ_STEP)
+    step = int(TRAJ_STEP)
+    base_inv = glm.inverse(root[frame])
+    i = 0
+    for f in range(start, end, step):
+        f = glm.clamp(f, 0, num_frames - 1)
+        xform = base_inv * root[f]
+        o = i * TRAJ_ELEMENT_SIZE
+        pos = glm.vec3(xform[3])
+        traj_array[frame, o : o + 2] = [pos.x, pos.z]
+        dir = glm.mat3(xform) * glm.vec3(1, 0, 0)
+        traj_array[frame, o + 2 : o + 4] = [dir.x, dir.z]
+        i = i + 1
+
+
+def build_traj(root):
+    num_frames = len(root)
+    traj_array = np.zeros((num_frames, TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE))
+    for frame in range(num_frames):
+        build_traj_at_frame(root, frame, traj_array)
+    return traj_array
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Error: expected mocap filename (without .bvh extension)")
+        exit(1)
+
+    mocap_basename = sys.argv[1]
+    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
+
+    # unpickle root xforms
+    root = mocap.unpickle_obj(outbasepath + "_root.pkl")
+
+    traj_array = build_traj(root)
+
+    # save traj
+    np.save(outbasepath + "_traj.npy", traj_array)

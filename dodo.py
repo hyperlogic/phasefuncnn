@@ -3,6 +3,8 @@ import os
 
 
 OUTPUT_DIR = "output"
+TRAJ_WINDOW_SIZE = 12
+TRAJ_ELEMENT_SIZE = 6  # 6 for px, py, pz, dx, dy, dz
 
 mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
 # mocap_paths = ["../PFNN/data/animations/LocomotionFlat01_000.bvh"]
@@ -12,8 +14,8 @@ xform_targets = (
     + [os.path.join(OUTPUT_DIR, m + "_skeleton.pkl") for m in mocap]
     + [os.path.join(OUTPUT_DIR, m + "_root.pkl") for m in mocap]
 )
-
-jointpva_targets = [os.path.join(OUTPUT_DIR, m + "_jointpva.pkl") for m in mocap]
+jointpva_targets = [os.path.join(OUTPUT_DIR, m + "_jointpva.npy") for m in mocap]
+traj_targets = [os.path.join(OUTPUT_DIR, m + "_traj.npy") for m in mocap]
 
 
 def task_build_xforms():
@@ -40,3 +42,12 @@ def task_build_jointpva():
     }
 
 
+def task_build_traj():
+    """Build root-space trajectory window around each frame."""
+    code_deps = [__file__, "build_traj.py"]
+    return {
+        "file_dep": code_deps + jointpva_targets,
+        "targets": traj_targets,
+        "actions": [f"python build_traj.py {m}" for m in mocap],
+        "clean": True,
+    }

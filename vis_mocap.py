@@ -9,23 +9,28 @@ import sys
 from wgpu.gui.auto import WgpuCanvas, run
 
 OUTPUT_DIR = "output"
-
+TRAJ_WINDOW_SIZE = 12
+TRAJ_ELEMENT_SIZE = 4
 
 def quat_swizzle(quat):
     return [quat[1], quat[2], quat[3], quat[0]]
+
+def orient_towards(dir):
+    return quat_swizzle(glm.quat(glm.vec3(1, 0, 0), dir))
 
 def orient_line_from_pv(line, pos, vel):
     line.local.position = pos
     speed = glm.length(vel)
     if speed > 1e-6:
-        line.local.rotation = quat_swizzle(glm.quat(glm.vec3(1, 0, 0), vel / speed))
+        line.local.rotation = orient_towards(vel / speed)
     else:
         line.local.rotation = quat_swizzle(glm.quat())
     SCALE_FACTOR = 0.1
     line.local.scale = max(speed * SCALE_FACTOR, 0.01)
 
+
 class RenderBuddy:
-    def __init__(self, skeleton, xforms, root, jointpva):
+    def __init__(self, skeleton, xforms, root, jointpva, traj):
 
         self.start_frame = 0
         self.end_frame = sys.maxsize
@@ -35,6 +40,8 @@ class RenderBuddy:
         self.skeleton = skeleton
         self.xforms = xforms
         self.root = root
+        self.traj = traj
+        self.jointpva = jointpva
 
         self.scene = gfx.Scene()
         self.scene.add(gfx.AmbientLight(intensity=1))
@@ -69,9 +76,9 @@ class RenderBuddy:
                 gfx.box_geometry(radius, radius, radius),
                 gfx.MeshPhongMaterial(color=joint_colors[joint_name]),
             )
-            mesh.local.position = jointpva[0][i][0:3]
+            mesh.local.position = self.jointpva[0][i][0:3]
             mesh.local.rotation = quat_swizzle(
-                mocap.expmap(glm.vec3(jointpva[0][i][6:9]))
+                mocap.expmap(glm.vec3(self.jointpva[0][i][6:9]))
             )
             self.joint_mesh.append(mesh)
             self.root_group.add(mesh)
@@ -80,10 +87,19 @@ class RenderBuddy:
                 gfx.Geometry(positions=[[0, 0, 0], [1, 0, 0]]),
                 gfx.LineMaterial(thickness=2.0, color="#ff0000"),
             )
-            line.local.position = jointpva[0][i][0:3]
+            line.local.position = self.jointpva[0][i][0:3]
             line.local.scale = 0.1
             self.joint_vels.append(line)
             self.root_group.add(line)
+
+        self.traj_axes = []
+        for i in range(TRAJ_WINDOW_SIZE):
+            axes = gfx.helpers.AxesHelper(3.0, 0.5)
+            o = i * TRAJ_ELEMENT_SIZE
+            axes.local.position = glm.vec3(traj[0][o], 0, traj[0][o+1])
+            axes.local.rotation = orient_towards(glm.vec3(traj[0][o+2], 0, traj[0][o+3]))
+            self.traj_axes.append(axes)
+            self.root_group.add(axes)
 
         self.camera = gfx.PerspectiveCamera(70, 4 / 3)
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
@@ -107,14 +123,14 @@ class RenderBuddy:
                 self.curr_frame = self.start_frame
 
         for i in range(self.skeleton.num_joints):
-            pos = glm.vec3(jointpva[self.curr_frame][i][0:3])
+            pos = glm.vec3(self.jointpva[self.curr_frame][i][0:3])
             rot = quat_swizzle(
-                mocap.expmap(glm.vec3(jointpva[self.curr_frame][i][6:9]))
+                mocap.expmap(glm.vec3(self.jointpva[self.curr_frame][i][6:9]))
             )
             self.joint_mesh[i].local.position = pos
             self.joint_mesh[i].local.rotation = rot
 
-            vel = glm.vec3(jointpva[self.curr_frame][i][3:6])
+            vel = glm.vec3(self.jointpva[self.curr_frame][i][3:6])
             orient_line_from_pv(self.joint_vels[i], pos, vel)
 
         # update root_group
@@ -122,6 +138,14 @@ class RenderBuddy:
         root_rot = quat_swizzle(glm.quat(self.root[self.curr_frame]))
         self.root_group.local.position = root_pos
         self.root_group.local.rotation = root_rot
+
+        # update trajectory
+        for i in range(TRAJ_WINDOW_SIZE):
+            axes = self.traj_axes[i]
+            o = i * TRAJ_ELEMENT_SIZE
+            axes.local.position = glm.vec3(traj[self.curr_frame][o], 0, traj[self.curr_frame][o+1])
+            axes.local.rotation = orient_towards(glm.vec3(traj[self.curr_frame][o+2], 0, traj[self.curr_frame][o+3]))
+
 
         self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw()
@@ -146,6 +170,7 @@ if __name__ == "__main__":
     xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
     root = mocap.unpickle_obj(outbasepath + "_root.pkl")
     jointpva = np.load(outbasepath + "_jointpva.npy")
+    traj = np.load(outbasepath + "_traj.npy")
 
-    renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva)
+    renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva, traj)
     run()
