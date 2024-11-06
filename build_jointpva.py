@@ -23,15 +23,10 @@ def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
         local_xform = inv_root[frame] * xforms[frame][i]
 
         # position
-        jointpva_array[frame, i, 0] = local_xform[3][0]
-        jointpva_array[frame, i, 1] = local_xform[3][1]
-        jointpva_array[frame, i, 2] = local_xform[3][2]
+        jointpva_array[frame, i, 0:3] = glm.vec3(local_xform[3])
 
         # angle (rotation in expmap format)
-        exp = mocap.logmap(glm.quat(local_xform))
-        jointpva_array[frame][i][6] = exp[0]
-        jointpva_array[frame][i][7] = exp[1]
-        jointpva_array[frame][i][8] = exp[2]
+        jointpva_array[frame, i, 6:9] = mocap.logmap(glm.quat(local_xform))
 
 
 def build_jointv_at_frame(skeleton, frame, jointpva_array):
@@ -41,19 +36,10 @@ def build_jointv_at_frame(skeleton, frame, jointpva_array):
     for i in range(num_joints):
         # velocties
         if frame > 0 and frame < num_frames - 1:
-            jointpva_array[frame][i][3] = (
-                jointpva_array[frame + 1][i][0] - jointpva_array[frame - 1][i][0]
-            ) / t
-            jointpva_array[frame][i][4] = (
-                jointpva_array[frame + 1][i][1] - jointpva_array[frame - 1][i][1]
-            ) / t
-            jointpva_array[frame][i][5] = (
-                jointpva_array[frame + 1][i][2] - jointpva_array[frame - 1][i][2]
-            ) / t
+            d = jointpva_array[frame + 1, i, 0:3] - jointpva_array[frame - 1, i, 0:3]
+            jointpva_array[frame, i, 3:6] = d / t
         else:
-            jointpva_array[frame][i][3] = 0
-            jointpva_array[frame][i][4] = 0
-            jointpva_array[frame][i][5] = 0
+            jointpva_array[frame, i, 3:6] = [0, 0, 0]
 
 
 def build_jointpva(skeleton, xforms, root):
@@ -81,7 +67,7 @@ if __name__ == "__main__":
     xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
     root = mocap.unpickle_obj(outbasepath + "_root.pkl")
 
-    # invert root xforms
+    # build joint pos, vel, and angle
     jointpva_array = build_jointpva(skeleton, xforms, root)
 
     # save jointpva_array
