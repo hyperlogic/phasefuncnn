@@ -12,11 +12,14 @@ OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 
+
 def quat_swizzle(quat):
     return [quat[1], quat[2], quat[3], quat[0]]
 
+
 def orient_towards(dir):
     return quat_swizzle(glm.quat(glm.vec3(1, 0, 0), dir))
+
 
 def orient_line_from_pv(line, pos, vel):
     line.local.position = pos
@@ -30,7 +33,7 @@ def orient_line_from_pv(line, pos, vel):
 
 
 class RenderBuddy:
-    def __init__(self, skeleton, xforms, root, jointpva, traj):
+    def __init__(self, skeleton, xforms, root, jointpva, traj, contacts):
 
         self.start_frame = 0
         self.end_frame = sys.maxsize
@@ -40,8 +43,9 @@ class RenderBuddy:
         self.skeleton = skeleton
         self.xforms = xforms
         self.root = root
-        self.traj = traj
         self.jointpva = jointpva
+        self.traj = traj
+        self.contacts = contacts
 
         self.scene = gfx.Scene()
         self.scene.add(gfx.AmbientLight(intensity=1))
@@ -63,10 +67,6 @@ class RenderBuddy:
 
         # build sphere for every transform
         joint_colors = {name: "#ffffff" for name in self.skeleton.joint_names}
-        joint_colors["LeftUpLeg"] = "#0000ff"
-        joint_colors["RightUpLeg"] = "#ff0000"
-        joint_colors["LeftArm"] = "#0000ff"
-        joint_colors["RightArm"] = "#ff0000"
         self.joint_mesh = []
         self.joint_vels = []
         for i in range(skeleton.num_joints):
@@ -96,8 +96,10 @@ class RenderBuddy:
         for i in range(TRAJ_WINDOW_SIZE):
             axes = gfx.helpers.AxesHelper(3.0, 0.5)
             o = i * TRAJ_ELEMENT_SIZE
-            axes.local.position = glm.vec3(traj[0][o], 0, traj[0][o+1])
-            axes.local.rotation = orient_towards(glm.vec3(traj[0][o+2], 0, traj[0][o+3]))
+            axes.local.position = glm.vec3(traj[0][o], 0, traj[0][o + 1])
+            axes.local.rotation = orient_towards(
+                glm.vec3(traj[0][o + 2], 0, traj[0][o + 3])
+            )
             self.traj_axes.append(axes)
             self.root_group.add(axes)
 
@@ -143,9 +145,27 @@ class RenderBuddy:
         for i in range(TRAJ_WINDOW_SIZE):
             axes = self.traj_axes[i]
             o = i * TRAJ_ELEMENT_SIZE
-            axes.local.position = glm.vec3(traj[self.curr_frame][o], 0, traj[self.curr_frame][o+1])
-            axes.local.rotation = orient_towards(glm.vec3(traj[self.curr_frame][o+2], 0, traj[self.curr_frame][o+3]))
+            axes.local.position = glm.vec3(
+                traj[self.curr_frame][o], 0, traj[self.curr_frame][o + 1]
+            )
+            axes.local.rotation = orient_towards(
+                glm.vec3(traj[self.curr_frame][o + 2], 0, traj[self.curr_frame][o + 3])
+            )
 
+        # update contacts
+        feet = [
+            self.skeleton.get_joint_index("LeftFoot"),
+            self.skeleton.get_joint_index("RightFoot"),
+            self.skeleton.get_joint_index("LeftToeBase"),
+            self.skeleton.get_joint_index("RightToeBase"),
+        ]
+        for i, joint in enumerate(feet):
+            if self.contacts[self.curr_frame][i] > 0.5:
+                self.joint_mesh[joint].material.color = "#ff0000"
+                self.joint_mesh[joint].local.scale = 2
+            else:
+                self.joint_mesh[joint].material.color = "#0000ff"
+                self.joint_mesh[joint].local.scale = 1
 
         self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw()
@@ -171,6 +191,7 @@ if __name__ == "__main__":
     root = mocap.unpickle_obj(outbasepath + "_root.pkl")
     jointpva = np.load(outbasepath + "_jointpva.npy")
     traj = np.load(outbasepath + "_traj.npy")
+    contacts = np.load(outbasepath + "_contacts.npy")
 
-    renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva, traj)
+    renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva, traj, contacts)
     run()

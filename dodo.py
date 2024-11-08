@@ -16,6 +16,9 @@ xform_targets = (
 )
 jointpva_targets = [os.path.join(OUTPUT_DIR, m + "_jointpva.npy") for m in mocap]
 traj_targets = [os.path.join(OUTPUT_DIR, m + "_traj.npy") for m in mocap]
+contacts_targets = [os.path.join(OUTPUT_DIR, m + "_contacts.npy") for m in mocap] + [
+    os.path.join(OUTPUT_DIR, m + "_phase.npy") for m in mocap
+]
 
 
 def task_build_xforms():
@@ -49,5 +52,16 @@ def task_build_traj():
         "file_dep": code_deps + jointpva_targets,
         "targets": traj_targets,
         "actions": [f"python build_traj.py {m}" for m in mocap],
+        "clean": True,
+    }
+
+
+def task_build_contacts():
+    """Build root-space trajectory window around each frame."""
+    code_deps = [__file__, "build_contacts.py"]
+    return {
+        "file_dep": code_deps + xform_targets,
+        "targets": contacts_targets,
+        "actions": [f"python build_contacts.py {m}" for m in mocap],
         "clean": True,
     }
