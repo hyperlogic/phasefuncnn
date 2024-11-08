@@ -33,7 +33,7 @@ def orient_line_from_pv(line, pos, vel):
 
 
 class RenderBuddy:
-    def __init__(self, skeleton, xforms, root, jointpva, traj, contacts):
+    def __init__(self, skeleton, xforms, root, jointpva, traj, contacts, phase):
 
         self.start_frame = 0
         self.end_frame = sys.maxsize
@@ -46,6 +46,7 @@ class RenderBuddy:
         self.jointpva = jointpva
         self.traj = traj
         self.contacts = contacts
+        self.phase = phase
 
         self.scene = gfx.Scene()
         self.scene.add(gfx.AmbientLight(intensity=1))
@@ -53,25 +54,27 @@ class RenderBuddy:
         self.scene.add(gfx.helpers.AxesHelper(10.0, 0.5))
         self.scene.add(gfx.helpers.GridHelper(size=100))
 
-        # draw a disc under the root position.
-        self.root_group = gfx.helpers.AxesHelper(10.0, 1.0)  # gfx.Group()
+        # use a group to position all elements that are in root-relative space
+        self.root_group = gfx.Group() #gfx.helpers.AxesHelper(10.0, 1.0)  # gfx.Group()
         self.root_group.local.position = glm.vec3(self.root[0][3])
         self.root_group.local.rotation = quat_swizzle(glm.quat(self.root[0]))
         self.scene.add(self.root_group)
 
+        # add a disc (flattened sphere) to display the root motion
         self.root_sphere = gfx.Mesh(
             gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#aaaaff")
         )
         self.root_sphere.local.scale = glm.vec3(2, 0.01, 2)
         self.root_group.add(self.root_sphere)
 
-        # build sphere for every transform
         joint_colors = {name: "#ffffff" for name in self.skeleton.joint_names}
         self.joint_mesh = []
         self.joint_vels = []
         for i in range(skeleton.num_joints):
             joint_name = skeleton.get_joint_name(i)
             radius = 0.5
+
+            # add a box to render each joint
             mesh = gfx.Mesh(
                 gfx.box_geometry(radius, radius, radius),
                 gfx.MeshPhongMaterial(color=joint_colors[joint_name]),
@@ -83,6 +86,7 @@ class RenderBuddy:
             self.joint_mesh.append(mesh)
             self.root_group.add(mesh)
 
+            # add line to render joint velocity
             line = gfx.Line(
                 gfx.Geometry(positions=[[0, 0, 0], [1, 0, 0]]),
                 gfx.LineMaterial(thickness=2.0, color="#ff0000"),
@@ -92,6 +96,7 @@ class RenderBuddy:
             self.joint_vels.append(line)
             self.root_group.add(line)
 
+        # add an axes helper for each element of the trajectory
         self.traj_axes = []
         for i in range(TRAJ_WINDOW_SIZE):
             axes = gfx.helpers.AxesHelper(3.0, 0.5)
@@ -105,6 +110,21 @@ class RenderBuddy:
 
         self.camera = gfx.PerspectiveCamera(70, 4 / 3)
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
+
+        # add a line for rendering phase as a clock
+        self.clock_group = gfx.Group()
+        clock_hand = gfx.Mesh(
+            gfx.box_geometry(0.1, 1, 0.1),
+            gfx.MeshPhongMaterial(color="#ffffff")
+        )
+        clock_hand.local.position = [0, 0.5, 0]
+        clock_dial = gfx.Mesh(
+            gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#0000ff")
+        )
+        clock_dial.local.scale = glm.vec3(1, 1, 0.001)
+        self.clock_group.add(clock_hand)
+        self.clock_group.add(clock_dial)
+        self.scene.add(self.clock_group)
 
         self.canvas = WgpuCanvas()
         self.renderer = gfx.renderers.WgpuRenderer(self.canvas)
@@ -167,6 +187,18 @@ class RenderBuddy:
                 self.joint_mesh[joint].material.color = "#0000ff"
                 self.joint_mesh[joint].local.scale = 1
 
+        # animate phase
+        cam_pos = self.camera.world.position
+        q = self.camera.world.rotation
+        cam_rot = glm.quat(q[3], q[0], q[1], q[2])
+        cam_xform = glm.mat4(cam_rot)
+        cam_xform[3] = glm.vec4(glm.vec3(cam_pos), 1)
+        offset_pos = glm.vec3(10, 7, -20)
+        phase_spin = glm.angleAxis(-phase[self.curr_frame], glm.vec3(0, 0, 1))
+
+        self.clock_group.world.position = cam_xform * offset_pos
+        self.clock_group.world.rotation = quat_swizzle(cam_rot * phase_spin)
+
         self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw()
 
@@ -192,6 +224,7 @@ if __name__ == "__main__":
     jointpva = np.load(outbasepath + "_jointpva.npy")
     traj = np.load(outbasepath + "_traj.npy")
     contacts = np.load(outbasepath + "_contacts.npy")
+    phase = np.load(outbasepath + "_phase.npy")
 
-    renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva, traj, contacts)
+    renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva, traj, contacts, phase)
     run()
