@@ -261,7 +261,7 @@ if __name__ == "__main__":
     mocap_basename = sys.argv[1]
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
-    # unpickle skeleton, xforms, jointpva
+    # unpickle/load data
     skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
     xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
     root = mocap.unpickle_obj(outbasepath + "_root.pkl")

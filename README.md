@@ -24,7 +24,27 @@ intermediate data files
     [2:4] (dx, dy) direction of motion along trajectory (relative to root of current frame)
 *_rootvel.npy - np.ndarray of shape (num_frames, 3) [0:2] (vx, vz) velocity of motion in root frame
     [2:3] (angv) angular vel of motion in root frame
-[TODO] *_phase.npy - np.ndarray of shape (num_frames) phase of each frame. [0, 2*pi)
+*_phase.npy - np.ndarray of shape (num_frames) phase of each frame. [0, 2*pi)
 *_contacts.npy - np.ndarray of shape (num_frames, 4) [0:4] (lfoot, rfoot, ltoe, rtoe) - 1 if foot is in contact with ground.
+
+
+input row
+------------
+x = { trajpd_i trajd_i jointp_i-1 jointv_i-1f, phase_i-1 }
+
+trajpd_i - TRAJ_WINDOW_SIZE * 4 floats total
+jointpv_i-1 - NUM_JOINTS * 6 floats total
+phase_i-1 - 1 float
+
+
+output row
+-------------------
+y = { trajp_i+1 trajd_i+1 jointp_i jointv_i jointa_i rootvel_i, phasevel_i, contacts_i }
+
+trajpd_i+1 - TRAJ_WINDOW_SIZE * 4 floats total
+jointpva_i - NUM_JOINTS * 9 floats total
+rootvel_i - 3 floats total
+phasevel_i - 1 float
+contacts_i - 4 floats
 
 
