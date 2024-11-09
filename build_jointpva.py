@@ -36,8 +36,8 @@ def build_jointv_at_frame(skeleton, frame, jointpva_array):
     for i in range(num_joints):
         # velocties
         if frame > 0 and frame < num_frames - 1:
-            d = jointpva_array[frame + 1, i, 0:3] - jointpva_array[frame - 1, i, 0:3]
-            jointpva_array[frame, i, 3:6] = d / t
+            dist = jointpva_array[frame + 1, i, 0:3] - jointpva_array[frame - 1, i, 0:3]
+            jointpva_array[frame, i, 3:6] = dist / t
         else:
             jointpva_array[frame, i, 3:6] = [0, 0, 0]
 

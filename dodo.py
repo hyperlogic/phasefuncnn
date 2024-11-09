@@ -15,7 +15,9 @@ xform_targets = (
     + [os.path.join(OUTPUT_DIR, m + "_root.pkl") for m in mocap]
 )
 jointpva_targets = [os.path.join(OUTPUT_DIR, m + "_jointpva.npy") for m in mocap]
-traj_targets = [os.path.join(OUTPUT_DIR, m + "_traj.npy") for m in mocap]
+traj_targets = [os.path.join(OUTPUT_DIR, m + "_traj.npy") for m in mocap] + [
+    os.path.join(OUTPUT_DIR, m + "_rootvel.npy") for m in mocap
+]
 contacts_targets = [os.path.join(OUTPUT_DIR, m + "_contacts.npy") for m in mocap] + [
     os.path.join(OUTPUT_DIR, m + "_phase.npy") for m in mocap
 ]

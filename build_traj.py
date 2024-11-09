@@ -2,9 +2,12 @@
 # Build trajectory for root character motion
 # Each frame contains TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE floats
 # Each element contains pos (x, z) and direction (x, z)
+# Also output the forward and rightward velocity and the angular velocity of the root motion.
 #
 
+import cmath
 import glm
+import math
 import mocap
 import numpy as np
 import os
@@ -46,6 +49,33 @@ def build_traj(root):
     return traj_array
 
 
+def build_rootvel(root):
+    num_frames = len(root)
+    t = (1 / SAMPLE_RATE) * 2
+    inv_root = [glm.inverse(m) for m in root]
+    rootvel = np.zeros((num_frames, 3))
+    for frame in range(num_frames):
+        if frame > 0 and frame < num_frames - 1:
+            # calculate vel in root frame.
+            dist = glm.vec3(root[frame + 1][3]) - glm.vec3(root[frame - 1][3])
+            vel = dist / t
+            rootvel[frame, 0:2] = [vel.x, vel.z]
+
+            # calculate angular vel
+            v0 = glm.mat3(root[frame - 1]) * glm.vec3(1, 0, 0)
+            v1 = glm.mat3(root[frame + 1]) * glm.vec3(1, 0, 0)
+
+            c0 = complex(v0.x, v0.z)
+            c1 = complex(v1.x, v1.z)
+            delta_c = c1 * c0.conjugate()
+            angvel = cmath.phase(delta_c) / t
+            rootvel[frame, 2] = angvel
+        else:
+            rootvel[frame, 0:3] = [0, 0, 0]
+
+    return rootvel
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Error: expected mocap filename (without .bvh extension)")
@@ -58,6 +88,10 @@ if __name__ == "__main__":
     root = mocap.unpickle_obj(outbasepath + "_root.pkl")
 
     traj_array = build_traj(root)
+    rootvel = build_rootvel(root)
 
     # save traj
     np.save(outbasepath + "_traj.npy", traj_array)
+
+    # save rootvel
+    np.save(outbasepath + "_rootvel.npy", rootvel)
