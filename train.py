@@ -4,6 +4,7 @@ import numpy as np
 import os
 import pickle
 import sys
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -80,6 +81,11 @@ class PFNN(nn.Module):
         return x
 
 
+DEBUG_COUNT = 500
+MAX_EPOCHS = 500
+BATCH_SIZE = 100
+VAL_DATASET_FACTOR = 0.1
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Error: expected mocap filename (without .bvh extension)")
@@ -89,17 +95,97 @@ if __name__ == "__main__":
     print(f"cuda.is_available() = {torch.cuda.is_available()}")
     print(f"device = {device}")
 
-    mocap_basename = sys.argv[1]
-
     # load dataset
-    dataset = MocapDataset(mocap_basename)
+    mocap_basename = sys.argv[1]
+    full_dataset = MocapDataset(mocap_basename)
+
+    VAL_DATASET_SIZE = int(len(full_dataset) * VAL_DATASET_FACTOR)
 
     # instantiate model
-    x, y = dataset[0]
+    x, y = full_dataset[0]
     model = PFNN(x.shape[0], y.shape[0]).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
-    print(f"len(dataset) = {len(dataset)}")
+    # split dataset into train and validation sets
+    torch.manual_seed(42)
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        full_dataset,
+        [
+            len(full_dataset) - VAL_DATASET_SIZE,
+            VAL_DATASET_SIZE,
+        ],
+    )
+    torch.manual_seed(torch.initial_seed())
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0
+    )
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0
+    )
+
+    print(f"len(full_dataset) = {len(full_dataset)}")
     print(f"x.shape = {x.shape}")
     print(f"y.shape = {y.shape}")
 
-    print("done! (not really)")
+    #
+    # train
+    #
+
+    best_val_loss = float("inf")
+    epochs_without_improvement = 0
+    max_epochs_without_improvement = 10
+    train_start_time = time.time()
+
+    for epoch in range(MAX_EPOCHS):
+        # train the model
+        train_loss = 0.0
+        train_count = 0
+
+        for x, y in train_loader:
+            x, y = x.to(device), y.to(device)
+
+            optimizer.zero_grad()
+            output = model(x)
+            loss = criterion(output, y)
+
+            train_loss += loss.item()
+            train_count += 1
+
+            loss.backward()
+            optimizer.step()
+
+        avg_train_loss = train_loss / train_count
+
+        # validate the model
+        val_loss = 0.0
+        val_count = 0
+
+        with torch.no_grad():
+            for image, target in val_loader:
+                # transfer tensors to gpu
+                x, y = x.to(device), y.to(device)
+
+                output = model(x)
+                loss = criterion(output, y)
+                val_loss += loss.item()
+                val_count += 1
+
+        avg_val_loss = val_loss / val_count
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        print(
+            f"Epoch {epoch+1}: Training Loss = {avg_train_loss}, Validation Loss = {avg_val_loss}"
+        )
+
+        if epochs_without_improvement >= max_epochs_without_improvement:
+            print("Early stopping triggered. Stopping training.")
+            break
+
+    train_end_time = time.time()
+    print(f"Training took {train_end_time - train_start_time} sec")
