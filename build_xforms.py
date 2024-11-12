@@ -12,6 +12,7 @@ import os
 import sys
 from tqdm import trange, tqdm
 
+
 OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
 
@@ -132,17 +133,11 @@ if __name__ == "__main__":
     with open(mocap_filename) as f:
         bvh = Bvh(f.read())
 
-    # sample the mocap data at the desired sample rate
-    mocap_sample_rate = round(1 / bvh.frame_time)
-    assert (
-        mocap_sample_rate % SAMPLE_RATE
-    ) == 0  # mocap_sample_rate must be a multiple of DESIRED_SAMPLE_RATE
-    sample_step = int(mocap_sample_rate / SAMPLE_RATE)
 
     skeleton = mocap.Skeleton(bvh)
     print(skeleton.joint_names)
 
-    xforms = build_xforms(bvh, skeleton, sample_step)
+    xforms = mocap.build_xforms_from_bvh(bvh, skeleton, SAMPLE_RATE)
     root_list = build_root_motion(skeleton, xforms)
 
     # create output dir

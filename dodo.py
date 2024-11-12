@@ -1,5 +1,7 @@
 from doit.action import CmdAction
+import importlib
 import os
+import pkgutil
 
 
 OUTPUT_DIR = "output"
@@ -23,9 +25,20 @@ contacts_targets = [os.path.join(OUTPUT_DIR, m + "_contacts.npy") for m in mocap
 ]
 
 
+def get_python_files_in_module(module_name):
+    result = []
+    module = importlib.import_module(module_name)
+    for importer, mod_name, is_pkg in pkgutil.walk_packages(module.__path__, module_name + "."):
+        if not is_pkg:
+            result.append(mod_name.replace(".", "/") + ".py")
+    return result
+
+mocap_deps = get_python_files_in_module("mocap")
+
+
 def task_build_xforms():
     """Build world space transform matrices for each joint and root motion, from a bvh file"""
-    code_deps = [__file__, "build_xforms.py"]
+    code_deps = [__file__, "build_xforms.py"] + mocap_deps
     return {
         "file_dep": code_deps + mocap_paths,
         "targets": xform_targets,
@@ -38,7 +51,7 @@ def task_build_xforms():
 
 def task_build_jointpva():
     """Build root-space position, velocity and angles (pva) for each joint"""
-    code_deps = [__file__, "build_jointpva.py"]
+    code_deps = [__file__, "build_jointpva.py"] + mocap_deps
     return {
         "file_dep": code_deps + xform_targets,
         "targets": jointpva_targets,
@@ -49,7 +62,7 @@ def task_build_jointpva():
 
 def task_build_traj():
     """Build root-space trajectory window around each frame."""
-    code_deps = [__file__, "build_traj.py"]
+    code_deps = [__file__, "build_traj.py"] + mocap_deps
     return {
         "file_dep": code_deps + jointpva_targets,
         "targets": traj_targets,
@@ -60,7 +73,7 @@ def task_build_traj():
 
 def task_build_contacts():
     """Build root-space trajectory window around each frame."""
-    code_deps = [__file__, "build_contacts.py"]
+    code_deps = [__file__, "build_contacts.py"] + mocap_deps
     return {
         "file_dep": code_deps + xform_targets,
         "targets": contacts_targets,

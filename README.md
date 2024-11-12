@@ -49,10 +49,12 @@ contacts_i - 4 floats
 
 TODO:
 -------------------------
+* get rid of glm and use numpy if possible.....
 * mirror animations
 * phase function of cubic catmull rom
 * normalization of inputs
 * regularization
+* dropout layers
 
 
 

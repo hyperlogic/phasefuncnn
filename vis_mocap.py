@@ -58,9 +58,9 @@ class RenderBuddy:
 
         self.draw_phase = False
         self.draw_root = True
-        self.draw_joints = False
-        self.draw_jointvel = True
-        self.draw_traj = False
+        self.draw_joints = True
+        self.draw_jointvel = False
+        self.draw_traj = True
         self.draw_rootvel = False
 
         # use a group to position all elements that are in root-relative space
@@ -204,7 +204,7 @@ class RenderBuddy:
                     self.joint_mesh[joint].material.color = "#ff0000"
                     self.joint_mesh[joint].local.scale = 2
                 else:
-                    self.joint_mesh[joint].material.color = "#0000ff"
+                    self.joint_mesh[joint].material.color = "#00ffff"
                     self.joint_mesh[joint].local.scale = 1
 
         if self.draw_jointvel:

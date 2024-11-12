@@ -2,6 +2,7 @@ numpy
 --extra-index-url https://download.pytorch.org/whl/cu124
 torch
 bvh
+bvhio
 pyglm
 glfw
 tqdm
