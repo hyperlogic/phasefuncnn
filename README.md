@@ -49,7 +49,6 @@ contacts_i - 4 floats
 
 TODO:
 -------------------------
-* mirror animations
 * phase function of cubic catmull rom
 * normalization of inputs
 * regularization

@@ -3,7 +3,7 @@ import copy
 import math
 import numpy as np
 from .skeleton import Skeleton
-from .util import build_mat_from_euler
+from .util import build_mat_from_euler, mat_mirror
 from tqdm import trange, tqdm
 
 
@@ -58,3 +58,11 @@ def build_xforms_from_bvh(bvh, skeleton, sample_rate):
         frame = frame + 1
 
     return xforms
+
+
+def mirror_xforms(skeleton, xforms):
+    mxforms = np.zeros(xforms.shape)
+    for i in range(xforms.shape[0]):
+        for j in range(xforms.shape[1]):
+            mxforms[i, skeleton.mirror_map[j]] = mat_mirror(xforms[i, j])
+    return mxforms

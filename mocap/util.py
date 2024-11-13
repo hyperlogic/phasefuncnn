@@ -149,7 +149,7 @@ def quat_from_vectors(from_vec, to_vec):
     dot_prod = np.dot(from_vec, to_vec)
 
     # Calculate the scalar part of the quaternion
-    w = np.sqrt(np.linalg.norm(from_vec)**2 * np.linalg.norm(to_vec)**2) + dot_prod
+    w = np.sqrt(np.linalg.norm(from_vec) ** 2 * np.linalg.norm(to_vec) ** 2) + dot_prod
 
     # Handle cases where vectors are parallel or anti-parallel
     if np.isclose(w, 0.0):  # Vectors are opposite
@@ -167,3 +167,15 @@ def quat_from_vectors(from_vec, to_vec):
 
     # Normalize the quaternion
     return quat / np.linalg.norm(quat)
+
+
+def quat_mirror(quat):
+    return np.array([quat[0], -quat[1], -quat[2], quat[3]])
+
+
+def mat_mirror(m):
+    mm = np.eye(4)
+    build_mat_from_quat(mm, quat_mirror(quat_from_mat(m)))
+    mm[0:3, 3] = m[0:3, 3]
+    mm[0, 3] = -m[0, 3]
+    return mm

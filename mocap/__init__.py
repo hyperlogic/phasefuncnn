@@ -8,4 +8,7 @@ from .util import build_mat_rotz
 from .util import build_mat_from_quat
 from .util import quat_from_mat
 from .util import quat_from_vectors
+from .util import quat_mirror
+from .util import mat_mirror
 from .bvh_util import build_xforms_from_bvh
+from .bvh_util import mirror_xforms

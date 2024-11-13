@@ -73,11 +73,17 @@ def build_root_motion(skeleton, xforms):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Error: expected bvh file argument")
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print("Error: expected bvh file argument, or -m flag")
         exit(1)
 
-    mocap_filename = sys.argv[1]
+    if sys.argv[1] == "-m":
+        mirror = True
+        mocap_filename = sys.argv[2]
+    else:
+        mirror = False
+        mocap_filename = sys.argv[1]
+
     mocap_basename = os.path.splitext(os.path.basename(mocap_filename))[0]
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
@@ -89,6 +95,10 @@ if __name__ == "__main__":
     print(skeleton.joint_names)
 
     xforms = mocap.build_xforms_from_bvh(bvh, skeleton, SAMPLE_RATE)
+
+    if mirror:
+        xforms = mocap.mirror_xforms(skeleton, xforms)
+
     root = build_root_motion(skeleton, xforms)
 
     # create output dir
