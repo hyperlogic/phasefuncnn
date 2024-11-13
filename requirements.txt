@@ -3,7 +3,6 @@ numpy
 torch
 bvh
 bvhio
-pyglm
 glfw
 tqdm
 pygfx

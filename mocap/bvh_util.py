@@ -1,6 +1,5 @@
 import bvh
 import copy
-import glm
 import math
 import numpy as np
 from .skeleton import Skeleton
@@ -59,14 +58,3 @@ def build_xforms_from_bvh(bvh, skeleton, sample_rate):
         frame = frame + 1
 
     return xforms
-
-
-def xforms_numpy_to_glm(nparray):
-    ii, jj, _, _ = nparray.shape
-    return [
-        [glm.mat4(*np.ravel(nparray[i, j], order="F")) for j in range(jj)]
-        for i in range(ii)
-    ]
-
-def root_numpy_to_glm(nparray):
-    return [glm.mat4(*np.ravel(nparray[i], order="F")) for i in range(nparray.shape[0])]

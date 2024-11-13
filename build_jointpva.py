@@ -25,9 +25,7 @@ def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
         jointpva_array[frame, i, 0:3] = local_xform[0:3, 3]
 
         # angle (rotation in expmap format)
-        jointpva_array[frame, i, 6:9] = mocap.logmap(
-            mocap.build_quat_from_mat(local_xform)
-        )
+        jointpva_array[frame, i, 6:9] = mocap.logmap(mocap.quat_from_mat(local_xform))
 
 
 def build_jointv_at_frame(skeleton, frame, jointpva_array):

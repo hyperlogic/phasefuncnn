@@ -1,4 +1,3 @@
-import glm
 import math
 import numpy as np
 import pickle
@@ -61,6 +60,7 @@ def build_mat_from_euler(mat, alpha, beta, gamma):
     ]
     mat[2] = [-sinb, cosb * sina, cosa * cosb, 0]
     mat[3] = [0, 0, 0, 1]
+    return mat
 
 
 def build_mat_rotx(mat, alpha):
@@ -69,6 +69,7 @@ def build_mat_rotx(mat, alpha):
     mat[1] = [0, cosa, -sina, 0]
     mat[2] = [0, sina, cosa, 0]
     mat[3] = [0, 0, 0, 1]
+    return mat
 
 
 def build_mat_roty(mat, beta):
@@ -77,6 +78,7 @@ def build_mat_roty(mat, beta):
     mat[1] = [0, 1, 0, 0]
     mat[2] = [-sinb, 0, cosb, 0]
     mat[3] = [0, 0, 0, 1]
+    return mat
 
 
 def build_mat_rotz(mat, gamma):
@@ -85,25 +87,21 @@ def build_mat_rotz(mat, gamma):
     mat[1] = [sing, cosg, 0, 0]
     mat[2] = [0, 0, 1, 0]
     mat[3] = [0, 0, 0, 1]
+    return mat
 
 
-def build_mat_from_quat(quat):
-    w, x, y, z = quat
+def build_mat_from_quat(mat, quat):
+    x, y, z, w = quat
 
     # Compute the matrix elements
-    matrix = np.array(
-        [
-            [1 - 2 * y**2 - 2 * z**2, 2 * x * y - 2 * z * w, 2 * x * z + 2 * y * w, 0],
-            [2 * x * y + 2 * z * w, 1 - 2 * x**2 - 2 * z**2, 2 * y * z - 2 * x * w, 0],
-            [2 * x * z - 2 * y * w, 2 * y * z + 2 * x * w, 1 - 2 * x**2 - 2 * y**2, 0],
-            [0, 0, 0, 1],
-        ]
-    )
-
-    return matrix
+    mat[0] = [1 - 2 * y**2 - 2 * z**2, 2 * x * y - 2 * z * w, 2 * x * z + 2 * y * w, 0]
+    mat[1] = [2 * x * y + 2 * z * w, 1 - 2 * x**2 - 2 * z**2, 2 * y * z - 2 * x * w, 0]
+    mat[2] = [2 * x * z - 2 * y * w, 2 * y * z + 2 * x * w, 1 - 2 * x**2 - 2 * y**2, 0]
+    mat[3] = [0, 0, 0, 1]
+    return mat
 
 
-def build_quat_from_mat(mat):
+def quat_from_mat(mat):
     # Extract the rotation part of the matrix (top-left 3x3)
     m = mat[:3, :3]
 
@@ -139,3 +137,33 @@ def build_quat_from_mat(mat):
             z = 0.25 * s
 
     return np.array([x, y, z, w])
+
+
+def quat_from_vectors(from_vec, to_vec):
+    # Normalize the input vectors
+    from_vec = from_vec / np.linalg.norm(from_vec)
+    to_vec = to_vec / np.linalg.norm(to_vec)
+
+    # Compute the cross product and the angle between the vectors
+    cross_prod = np.cross(from_vec, to_vec)
+    dot_prod = np.dot(from_vec, to_vec)
+
+    # Calculate the scalar part of the quaternion
+    w = np.sqrt(np.linalg.norm(from_vec)**2 * np.linalg.norm(to_vec)**2) + dot_prod
+
+    # Handle cases where vectors are parallel or anti-parallel
+    if np.isclose(w, 0.0):  # Vectors are opposite
+        # Rotate 180 degrees around an arbitrary axis perpendicular to `from_vec`
+        # We can use the x-axis [1,0,0] if from_vec isn't aligned with it,
+        # otherwise, we use the y-axis [0,1,0].
+        if np.abs(from_vec[0]) < 1.0:
+            axis = np.array([1, 0, 0])
+        else:
+            axis = np.array([0, 1, 0])
+        cross_prod = np.cross(from_vec, axis)
+        w = 0.0
+
+    quat = np.array([cross_prod[0], cross_prod[1], cross_prod[2], w])
+
+    # Normalize the quaternion
+    return quat / np.linalg.norm(quat)
