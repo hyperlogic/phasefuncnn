@@ -11,7 +11,7 @@ from tqdm import trange, tqdm
 # beta - rotaiton about y axis
 # gamma - rotaiton about z axis
 # mat = rotz @ roty @ rotx
-def build_mat(mat, alpha, beta, gamma, x, y, z):
+def build_mat_from_euler_pos(mat, alpha, beta, gamma, x, y, z):
     cosa, sina = math.cos(alpha), math.sin(alpha)
     cosb, sinb = math.cos(beta), math.sin(beta)
     cosg, sing = math.cos(gamma), math.sin(gamma)
@@ -29,6 +29,30 @@ def build_mat(mat, alpha, beta, gamma, x, y, z):
         y,
     ]
     mat[2] = [-sinb, cosb * sina, cosa * cosb, z]
+    mat[3] = [0, 0, 0, 1]
+
+
+def build_mat_rotx(mat, alpha):
+    cosa, sina = math.cos(alpha), math.sin(alpha)
+    mat[0] = [1, 0, 0, 0]
+    mat[1] = [0, cosa, -sina, 0]
+    mat[2] = [0, sina, cosa, 0]
+    mat[3] = [0, 0, 0, 1]
+
+
+def build_mat_roty(mat, beta):
+    cosb, sinb = math.cos(beta), math.sin(beta)
+    mat[0] = [cosb, 0, sinb, 0]
+    mat[1] = [0, 1, 0, 0]
+    mat[2] = [-sinb, 0, cosb, 0]
+    mat[3] = [0, 0, 0, 1]
+
+
+def build_mat_rotz(mat, gamma):
+    cosg, sing = math.cos(gamma), math.sin(gamma)
+    mat[0] = [cosg, -sing, 0, 0]
+    mat[1] = [sing, cosg, 0, 0]
+    mat[2] = [0, 0, 1, 0]
     mat[3] = [0, 0, 0, 1]
 
 
@@ -53,7 +77,7 @@ def build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame):
             roty = bvh.frame_joint_channel(bvh_frame, joint_name, "Yrotation") * pi_180
             rotz = bvh.frame_joint_channel(bvh_frame, joint_name, "Zrotation") * pi_180
 
-        build_mat(m, rotx, roty, rotz, posx, posy, posz)
+        build_mat_from_euler_pos(m, rotx, roty, rotz, posx, posy, posz)
 
         parent_index = skeleton.get_parent_index(joint_name)
         if parent_index >= 0:
@@ -81,12 +105,15 @@ def build_xforms_from_bvh(bvh, skeleton, sample_rate):
         build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame)
         frame = frame + 1
 
-    glm_xforms = []
-    for frame in range(bvh.nframes // sample_step):
-        joints = []
-        for joint in range(skeleton.num_joints):
-            m = glm.mat4(*np.ravel(xforms[frame, joint], order="F"))
-            joints.append(m)
-        glm_xforms.append(joints)
+    return xforms
 
-    return glm_xforms
+
+def xforms_numpy_to_glm(nparray):
+    ii, jj, _, _ = nparray.shape
+    return [
+        [glm.mat4(*np.ravel(nparray[i, j], order="F")) for j in range(jj)]
+        for i in range(ii)
+    ]
+
+def root_numpy_to_glm(nparray):
+    return [glm.mat4(*np.ravel(nparray[i], order="F")) for i in range(nparray.shape[0])]
