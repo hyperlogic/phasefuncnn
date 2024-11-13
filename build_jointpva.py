@@ -5,7 +5,6 @@
 #   Indices [3:6] are velocity x, y, z
 #   Indices [6:9] are the joint angles in R^3 form (can use mocap.expmap to convert into a quaternion)
 
-import glm
 import math
 import mocap
 import numpy as np
@@ -20,13 +19,15 @@ SAMPLE_RATE = 60
 def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
     num_joints = skeleton.num_joints
     for i in range(num_joints):
-        local_xform = inv_root[frame] * xforms[frame][i]
+        local_xform = inv_root[frame] @ xforms[frame][i]
 
         # position
-        jointpva_array[frame, i, 0:3] = glm.vec3(local_xform[3])
+        jointpva_array[frame, i, 0:3] = local_xform[0:3, 3]
 
         # angle (rotation in expmap format)
-        jointpva_array[frame, i, 6:9] = mocap.logmap(glm.quat(local_xform))
+        jointpva_array[frame, i, 6:9] = mocap.logmap(
+            mocap.build_quat_from_mat(local_xform)
+        )
 
 
 def build_jointv_at_frame(skeleton, frame, jointpva_array):
@@ -45,7 +46,7 @@ def build_jointv_at_frame(skeleton, frame, jointpva_array):
 def build_jointpva(skeleton, xforms, root):
     num_joints = skeleton.num_joints
     num_frames = len(xforms)
-    inv_root = [glm.inverse(m) for m in root]
+    inv_root = np.linalg.inv(root)
     jointpva_array = np.zeros((num_frames, num_joints, 9))
     for frame in range(num_frames):
         build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array)
@@ -64,8 +65,8 @@ if __name__ == "__main__":
 
     # unpickle skeleton, xforms
     skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
-    xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
-    root = mocap.unpickle_obj(outbasepath + "_root.pkl")
+    xforms = np.load(outbasepath + "_xforms.npy")
+    root = np.load(outbasepath + "_root.npy")
 
     # build joint pos, vel, and angle
     jointpva_array = build_jointpva(skeleton, xforms, root)

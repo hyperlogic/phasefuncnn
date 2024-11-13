@@ -12,10 +12,9 @@ mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
 # mocap_paths = ["../PFNN/data/animations/LocomotionFlat01_000.bvh"]
 mocap = [os.path.splitext(os.path.basename(n))[0] for n in mocap_paths]
 xform_targets = (
-    [os.path.join(OUTPUT_DIR, m + "_xforms.pkl") for m in mocap]   # AJT: TODO REMOVE
-    + [os.path.join(OUTPUT_DIR, m + "_skeleton.pkl") for m in mocap]
-    + [os.path.join(OUTPUT_DIR, m + "_root.pkl") for m in mocap]
+    [os.path.join(OUTPUT_DIR, m + "_skeleton.pkl") for m in mocap]
     + [os.path.join(OUTPUT_DIR, m + "_xforms.npy") for m in mocap]
+    + [os.path.join(OUTPUT_DIR, m + "_root.npy") for m in mocap]
 )
 jointpva_targets = [os.path.join(OUTPUT_DIR, m + "_jointpva.npy") for m in mocap]
 traj_targets = [os.path.join(OUTPUT_DIR, m + "_traj.npy") for m in mocap] + [
@@ -29,10 +28,13 @@ contacts_targets = [os.path.join(OUTPUT_DIR, m + "_contacts.npy") for m in mocap
 def get_python_files_in_module(module_name):
     result = []
     module = importlib.import_module(module_name)
-    for importer, mod_name, is_pkg in pkgutil.walk_packages(module.__path__, module_name + "."):
+    for importer, mod_name, is_pkg in pkgutil.walk_packages(
+        module.__path__, module_name + "."
+    ):
         if not is_pkg:
             result.append(mod_name.replace(".", "/") + ".py")
     return result
+
 
 mocap_deps = get_python_files_in_module("mocap")
 

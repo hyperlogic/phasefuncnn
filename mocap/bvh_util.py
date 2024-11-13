@@ -4,56 +4,8 @@ import glm
 import math
 import numpy as np
 from .skeleton import Skeleton
+from .util import build_mat_from_euler
 from tqdm import trange, tqdm
-
-
-# alpha - rotation about x axis
-# beta - rotaiton about y axis
-# gamma - rotaiton about z axis
-# mat = rotz @ roty @ rotx
-def build_mat_from_euler_pos(mat, alpha, beta, gamma, x, y, z):
-    cosa, sina = math.cos(alpha), math.sin(alpha)
-    cosb, sinb = math.cos(beta), math.sin(beta)
-    cosg, sing = math.cos(gamma), math.sin(gamma)
-
-    mat[0] = [
-        cosb * cosg,
-        cosg * sina * sinb - cosa * sing,
-        cosa * cosg * sinb + sina * sing,
-        x,
-    ]
-    mat[1] = [
-        cosb * sing,
-        cosa * cosg + sina * sinb * sing,
-        -cosg * sina + cosa * sinb * sing,
-        y,
-    ]
-    mat[2] = [-sinb, cosb * sina, cosa * cosb, z]
-    mat[3] = [0, 0, 0, 1]
-
-
-def build_mat_rotx(mat, alpha):
-    cosa, sina = math.cos(alpha), math.sin(alpha)
-    mat[0] = [1, 0, 0, 0]
-    mat[1] = [0, cosa, -sina, 0]
-    mat[2] = [0, sina, cosa, 0]
-    mat[3] = [0, 0, 0, 1]
-
-
-def build_mat_roty(mat, beta):
-    cosb, sinb = math.cos(beta), math.sin(beta)
-    mat[0] = [cosb, 0, sinb, 0]
-    mat[1] = [0, 1, 0, 0]
-    mat[2] = [-sinb, 0, cosb, 0]
-    mat[3] = [0, 0, 0, 1]
-
-
-def build_mat_rotz(mat, gamma):
-    cosg, sing = math.cos(gamma), math.sin(gamma)
-    mat[0] = [cosg, -sing, 0, 0]
-    mat[1] = [sing, cosg, 0, 0]
-    mat[2] = [0, 0, 1, 0]
-    mat[3] = [0, 0, 0, 1]
 
 
 def build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame):
@@ -77,7 +29,8 @@ def build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame):
             roty = bvh.frame_joint_channel(bvh_frame, joint_name, "Yrotation") * pi_180
             rotz = bvh.frame_joint_channel(bvh_frame, joint_name, "Zrotation") * pi_180
 
-        build_mat_from_euler_pos(m, rotx, roty, rotz, posx, posy, posz)
+        build_mat_from_euler(m, rotx, roty, rotz)
+        m[0:3, 3] = [posx, posy, posz]
 
         parent_index = skeleton.get_parent_index(joint_name)
         if parent_index >= 0:

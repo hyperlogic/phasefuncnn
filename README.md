@@ -9,10 +9,10 @@ build_contacts.py - generates contact info and gait phase
 intermediate data files
 -------------------------
 *_skeleton.pkl - pickled mocap.Skeleton instance
-*_xforms.pkl - pickled world space transforms of each joint for each frame.
-    array with shape (num_frames, num_joints), where each element is a glm.mat4
-*_root.pkl - pickled world space transforms for the character root motion.
-    array with shape (num_frames), where each element is a glm.mat4
+*_xforms.npy - world space transforms of each joint for each frame.
+    numpy array with shape (num_frames, num_joints, 4, 4)
+*_root.npy - world space transforms for the character root motion.
+    with with shape (num_frames, 4, 4)
 *_jointpva.npy - np.ndarray of shape (num_frames, num_joints, 9) where each element is
     an array with 9 elements:
     [0:3] (px, py, py) is the position of the joint in root-relative space

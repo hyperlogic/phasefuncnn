@@ -1,11 +1,10 @@
 #
-# Build world space matrices (glm.mat4) for each joint at the given SAMPLE_RATE
-# Also, build the root motion matrices  (glm.mat4) for the character.
+# Build world space matrices for each joint at the given SAMPLE_RATE
+# Also, build the root motion matrices for the character.
 # And output the skeleton for the character (mocap.Skeleton)
 #
 
 from bvh import Bvh
-import glm
 import math
 import mocap
 import numpy as np
@@ -90,16 +89,12 @@ if __name__ == "__main__":
     print(skeleton.joint_names)
 
     xforms = mocap.build_xforms_from_bvh(bvh, skeleton, SAMPLE_RATE)
-    glm_xforms = mocap.xforms_numpy_to_glm(xforms) # AJT: TODO REMOVE
     root = build_root_motion(skeleton, xforms)
-    glm_root = mocap.root_numpy_to_glm(root)
 
     # create output dir
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # pickle skeleton, xforms
     mocap.pickle_obj(outbasepath + "_skeleton.pkl", skeleton)
-    mocap.pickle_obj(outbasepath + "_xforms.pkl", glm_xforms)    # AJT: TODO REMOVE
-    mocap.pickle_obj(outbasepath + "_root.pkl", glm_root)  # AJT: TODO REMOVER
     np.save(outbasepath + "_xforms.npy", xforms)
     np.save(outbasepath + "_root.npy", root)

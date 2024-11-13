@@ -1,4 +1,3 @@
-import glm
 import mocap
 import numpy as np
 import os
@@ -22,8 +21,7 @@ class MocapDataset(torch.utils.data.Dataset):
 
         # unpickle skeleton, xforms, jointpva
         self.skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
-        # self.xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
-        self.root = mocap.unpickle_obj(outbasepath + "_root.pkl")
+        self.root = np.load(outbasepath + "_root.npy")
         self.jointpva = np.load(outbasepath + "_jointpva.npy")
         self.traj = np.load(outbasepath + "_traj.npy")
         self.contacts = np.load(outbasepath + "_contacts.npy")

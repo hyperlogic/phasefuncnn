@@ -6,7 +6,6 @@
 #
 
 import cmath
-import glm
 import math
 import mocap
 import numpy as np
@@ -28,21 +27,21 @@ def build_traj_at_frame(root, frame, traj_array):
     start = int(frame - half_window * TRAJ_STEP)
     end = int(frame + half_window * TRAJ_STEP)
     step = int(TRAJ_STEP)
-    base_inv = glm.inverse(root[frame])
+    base_inv = np.linalg.inv(root[frame])
     i = 0
     for f in range(start, end, step):
-        f = glm.clamp(f, 0, num_frames - 1)
-        xform = base_inv * root[f]
+        f = np.clip(f, 0, num_frames - 1)
+        xform = base_inv @ root[f]
         o = i * TRAJ_ELEMENT_SIZE
-        pos = glm.vec3(xform[3])
-        traj_array[frame, o : o + 2] = [pos.x, pos.z]
-        dir = glm.mat3(xform) * glm.vec3(1, 0, 0)
-        traj_array[frame, o + 2 : o + 4] = [dir.x, dir.z]
+        pos = xform[0:3, 3]
+        traj_array[frame, o : o + 2] = [pos[0], pos[2]]
+        dir = xform[:3, :3] @ [1, 0, 0]
+        traj_array[frame, o + 2 : o + 4] = [dir[0], dir[2]]
         i = i + 1
 
 
 def build_traj(root):
-    num_frames = len(root)
+    num_frames = root.shape[0]
     traj_array = np.zeros((num_frames, TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE))
     for frame in range(num_frames):
         build_traj_at_frame(root, frame, traj_array)
@@ -50,23 +49,23 @@ def build_traj(root):
 
 
 def build_rootvel(root):
-    num_frames = len(root)
+    num_frames = root.shape[0]
     t = (1 / SAMPLE_RATE) * 2
-    inv_root = [glm.inverse(m) for m in root]
+    inv_root = np.linalg.inv(root)
     rootvel = np.zeros((num_frames, 3))
     for frame in range(num_frames):
         if frame > 0 and frame < num_frames - 1:
             # calculate vel in root frame.
-            dist = glm.vec3(root[frame + 1][3]) - glm.vec3(root[frame - 1][3])
+            dist = root[frame + 1, 0:3, 3] - root[frame - 1, 0:3, 3]
             vel = dist / t
-            rootvel[frame, 0:2] = [vel.x, vel.z]
+            rootvel[frame, 0:2] = [vel[0], vel[2]]
 
             # calculate angular vel
-            v0 = glm.mat3(root[frame - 1]) * glm.vec3(1, 0, 0)
-            v1 = glm.mat3(root[frame + 1]) * glm.vec3(1, 0, 0)
+            v0 = root[frame - 1, :3, :3] @ [1, 0, 0]
+            v1 = root[frame + 1, :3, :3] @ [1, 0, 0]
 
-            c0 = complex(v0.x, v0.z)
-            c1 = complex(v1.x, v1.z)
+            c0 = complex(v0[0], v0[2])
+            c1 = complex(v1[0], v1[2])
             delta_c = c1 * c0.conjugate()
             angvel = cmath.phase(delta_c) / t
             rootvel[frame, 2] = angvel
@@ -84,8 +83,8 @@ if __name__ == "__main__":
     mocap_basename = sys.argv[1]
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
-    # unpickle root xforms
-    root = mocap.unpickle_obj(outbasepath + "_root.pkl")
+    # load root xforms
+    root = np.load(outbasepath + "_root.npy")
 
     traj_array = build_traj(root)
     rootvel = build_rootvel(root)

@@ -65,8 +65,8 @@ class RenderBuddy:
 
         # use a group to position all elements that are in root-relative space
         self.root_group = gfx.Group()
-        self.root_group.local.position = glm.vec3(self.root[0][3])
-        self.root_group.local.rotation = quat_swizzle(glm.quat(self.root[0]))
+        self.root_group.local.position = self.root[0, 0:3, 3]
+        self.root_group.local.rotation = mocap.build_quat_from_mat(self.root[0])
         self.scene.add(self.root_group)
 
         if self.draw_root:
@@ -141,7 +141,7 @@ class RenderBuddy:
             self.scene.add(self.clock_group)
 
         if self.draw_rootvel:
-            positions = [glm.vec3(r[3]) for r in self.root]
+            positions = [r[0:3, 3] for r in self.root]
             root_line = gfx.Line(
                 gfx.Geometry(positions=positions),
                 gfx.LineMaterial(thickness=2.0, color="#0000ff"),
@@ -174,12 +174,12 @@ class RenderBuddy:
     def animate(self):
         if self.playing:
             self.curr_frame = self.curr_frame + 1
-            if self.curr_frame >= self.end_frame or self.curr_frame >= len(self.xforms):
+            if self.curr_frame >= self.end_frame or self.curr_frame >= xforms.shape[0]:
                 self.curr_frame = self.start_frame
 
         # update root_group
-        root_pos = glm.vec3(self.root[self.curr_frame][3])
-        root_rot = quat_swizzle(glm.quat(self.root[self.curr_frame]))
+        root_pos = self.root[self.curr_frame, 0:3, 3]
+        root_rot = mocap.build_quat_from_mat(self.root[self.curr_frame])
         self.root_group.local.position = root_pos
         self.root_group.local.rotation = root_rot
 
@@ -263,8 +263,8 @@ if __name__ == "__main__":
 
     # unpickle/load data
     skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
-    xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
-    root = mocap.unpickle_obj(outbasepath + "_root.pkl")
+    xforms = np.load(outbasepath + "_xforms.npy")
+    root = np.load(outbasepath + "_root.npy")
     jointpva = np.load(outbasepath + "_jointpva.npy")
     traj = np.load(outbasepath + "_traj.npy")
     contacts = np.load(outbasepath + "_contacts.npy")

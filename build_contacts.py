@@ -2,7 +2,6 @@
 # Build phase and foot contact for character
 #
 
-import glm
 import math
 import mocap
 import numpy as np
@@ -16,7 +15,7 @@ VEL_THRESH = 15
 
 
 def build_contacts(skeleton, xforms):
-    num_frames = len(xforms)
+    num_frames = xforms.shape[0]
     contacts = np.zeros((num_frames, 4))
     t = (1 / SAMPLE_RATE) * 2
 
@@ -30,14 +29,12 @@ def build_contacts(skeleton, xforms):
         for i, joint in enumerate(feet):
             # TODO: should also check angular vel it's probalby more accruate...
             if frame > 0 and frame < num_frames - 1:
-                vel = glm.vec3(xforms[frame + 1][joint][3]) - glm.vec3(
-                    xforms[frame - 1][joint][3]
-                )
+                vel = xforms[frame + 1, joint, 0:3, 3] - xforms[frame - 1, joint, 0:3, 3]
                 vel = vel / t
             else:
-                vel = glm.vec3(0, 0, 0)
-            speed = glm.length(vel)
-            contacts[frame][i] = 1 if speed < VEL_THRESH else 0
+                vel = np.array([0, 0, 0])
+            speed = np.linalg.norm(vel)
+            contacts[frame, i] = 1 if speed < VEL_THRESH else 0
 
     return contacts
 
@@ -110,7 +107,7 @@ if __name__ == "__main__":
 
     # unpickle skeleton and xforms
     skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
-    xforms = mocap.unpickle_obj(outbasepath + "_xforms.pkl")
+    xforms = np.load(outbasepath + "_xforms.npy")
 
     contacts = build_contacts(skeleton, xforms)
     phase = build_phase(contacts)
