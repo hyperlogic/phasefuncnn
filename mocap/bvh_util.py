@@ -7,51 +7,53 @@ from .skeleton import Skeleton
 from tqdm import trange, tqdm
 
 
-def glm_to_np(glm_mat, np_mat):
-    for i in range(4):
-        np_mat[:, i] = glm_mat[i]
+# alpha - rotation about x axis
+# beta - rotaiton about y axis
+# gamma - rotaiton about z axis
+# mat = rotz @ roty @ rotx
+def build_mat(mat, alpha, beta, gamma, x, y, z):
+    cosa, sina = math.cos(alpha), math.sin(alpha)
+    cosb, sinb = math.cos(beta), math.sin(beta)
+    cosg, sing = math.cos(gamma), math.sin(gamma)
+
+    mat[0] = [
+        cosb * cosg,
+        cosg * sina * sinb - cosa * sing,
+        cosa * cosg * sinb + sina * sing,
+        x,
+    ]
+    mat[1] = [
+        cosb * sing,
+        cosa * cosg + sina * sinb * sing,
+        -cosg * sina + cosa * sinb * sing,
+        y,
+    ]
+    mat[2] = [-sinb, cosb * sina, cosa * cosb, z]
+    mat[3] = [0, 0, 0, 1]
 
 
 def build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame):
 
+    m = np.eye(4)
+    pi_180 = math.pi / 180
+
     for i in range(skeleton.num_joints):
         joint_name = skeleton.get_joint_name(i)
-        offset = skeleton.get_joint_offset(joint_name)
-
-        pos = glm.vec3(offset[0], offset[1], offset[2])
+        o = skeleton.get_joint_offset(joint_name)
         if skeleton.has_pos(joint_name):
-            pos += glm.vec3(
-                bvh.frame_joint_channel(bvh_frame, joint_name, "Xposition"),
-                bvh.frame_joint_channel(bvh_frame, joint_name, "Yposition"),
-                bvh.frame_joint_channel(bvh_frame, joint_name, "Zposition"),
-            )
+            posx = bvh.frame_joint_channel(bvh_frame, joint_name, "Xposition") + o[0]
+            posy = bvh.frame_joint_channel(bvh_frame, joint_name, "Yposition") + o[1]
+            posz = bvh.frame_joint_channel(bvh_frame, joint_name, "Zposition") + o[2]
+        else:
+            posx, posy, posz = o
 
-        rot = glm.quat()
+        rotx, roty, rotz = 0, 0, 0
         if skeleton.has_rot(joint_name):
-            x_rot = glm.angleAxis(
-                glm.radians(
-                    bvh.frame_joint_channel(bvh_frame, joint_name, "Xrotation")
-                ),
-                glm.vec3(1, 0, 0),
-            )
-            y_rot = glm.angleAxis(
-                glm.radians(
-                    bvh.frame_joint_channel(bvh_frame, joint_name, "Yrotation")
-                ),
-                glm.vec3(0, 1, 0),
-            )
-            z_rot = glm.angleAxis(
-                glm.radians(
-                    bvh.frame_joint_channel(bvh_frame, joint_name, "Zrotation")
-                ),
-                glm.vec3(0, 0, 1),
-            )
-            rot = z_rot * (y_rot * x_rot)
+            rotx = bvh.frame_joint_channel(bvh_frame, joint_name, "Xrotation") * pi_180
+            roty = bvh.frame_joint_channel(bvh_frame, joint_name, "Yrotation") * pi_180
+            rotz = bvh.frame_joint_channel(bvh_frame, joint_name, "Zrotation") * pi_180
 
-        m = glm.mat4(rot)
-        m[3] = glm.vec4(pos, 1)
-        np_m = np.zeros((4, 4))
-        glm_to_np(m, np_m)
+        build_mat(m, rotx, roty, rotz, posx, posy, posz)
 
         parent_index = skeleton.get_parent_index(joint_name)
         if parent_index >= 0:
