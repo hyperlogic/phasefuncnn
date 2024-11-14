@@ -49,6 +49,7 @@ contacts_i - 4 floats
 
 TODO:
 -------------------------
+* correct loss function
 * phase function of cubic catmull rom
 * normalization of inputs
 * regularization
