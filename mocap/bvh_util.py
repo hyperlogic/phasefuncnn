@@ -53,7 +53,7 @@ def build_xforms_from_bvh(bvh, skeleton, sample_rate):
     )
 
     frame = 0
-    for bvh_frame in trange(0, bvh.nframes, sample_step):
+    for bvh_frame in range(0, bvh.nframes - 1, sample_step):
         build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame)
         frame = frame + 1
 
