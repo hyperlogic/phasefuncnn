@@ -1,7 +1,7 @@
 import mocap
 import numpy as np
 import os
-import pickle
+import pathlib
 import sys
 import time
 import torch
@@ -9,100 +9,152 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-OUTPUT_DIR = "output"
+OUTPUT_DIR = pathlib.Path("output")
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 
 
 class MocapDataset(torch.utils.data.Dataset):
-    def __init__(self, mocap_basename):
-
-        outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
+    def __init__(self):
 
         # unpickle skeleton, xforms, jointpva
-        self.skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
-        self.root = np.load(outbasepath + "_root.npy")
-        self.jointpva = np.load(outbasepath + "_jointpva.npy")
-        self.traj = np.load(outbasepath + "_traj.npy")
-        self.contacts = np.load(outbasepath + "_contacts.npy")
-        self.phase = np.load(outbasepath + "_phase.npy")
-        self.rootvel = np.load(outbasepath + "_rootvel.npy")
+        self.X = torch.load(OUTPUT_DIR / "X.pth", weights_only=True)
+        self.Y = torch.load(OUTPUT_DIR / "Y.pth", weights_only=True)
+        self.P = torch.load(OUTPUT_DIR / "P.pth", weights_only=True)
 
     def __len__(self):
-        # skip the first and last frames valid items
-        return len(self.root) - 2
+        return self.X.shape[0]
 
     def __getitem__(self, idx):
-        """
-        x = { trajpd_i trajd_i jointp_i-1 jointv_i-1f, phase_i-1 }
+        return self.X[idx], self.Y[idx], self.P[idx]
 
-        trajpd_i - TRAJ_WINDOW_SIZE * 4 floats total
-        jointpv_i-1 - NUM_JOINTS * 6 floats total
-        phase_i-1 - 1 float
-        """
-        num_joints = self.skeleton.num_joints
-        curr = idx + 1
-        trajpd_curr = self.traj[curr]
-        jointpv_prev = self.jointpva[curr - 1, 0:num_joints, 0:6].flatten()
-        phase_prev = np.array([self.phase[curr - 1]])
-        x = np.concatenate((trajpd_curr, jointpv_prev, phase_prev))
 
-        """
-        y = { trajp_i+1 trajd_i+1 jointp_i jointv_i jointa_i rootvel_i, phasevel_i, contacts_i }
+def catmul_rom_bias(phase, bias):
+    assert bias.shape[0] == 4
+    t = (4 * phase) / (2 * np.pi) % 1.0
+    tt = torch.zeros([t.shape[0], 4]).to(device)
+    tt[:, 0] = t**3
+    tt[:, 1] = t**2
+    tt[:, 2] = t
+    tt[:, 3] = 1
+    result = tt @ basis @ bias
+    return result
 
-        trajpd_i+1 - TRAJ_WINDOW_SIZE * 4 floats total
-        jointpva_i - NUM_JOINTS * 9 floats total
-        rootvel_i - 3 floats total
-        phasevel_i - 1 float
-        contacts_i - 4 floats
-        """
-        trajpd_next = self.traj[curr + 1]
-        jointpva_curr = self.jointpva[curr, 0:num_joints, 0:9].flatten()
-        rootvel_curr = self.rootvel[curr]
-        contacts_curr = self.contacts[curr]
-        y = np.concatenate((trajpd_next, jointpva_curr, rootvel_curr, contacts_curr))
 
-        return torch.Tensor(x), torch.Tensor(y)
+class PhaseLinear(nn.Module):
+    def __init__(self, input_len, output_len):
+        super(PhaseLinear, self).__init__()
+
+        # allocate control points
+        self.ws = nn.Parameter(torch.Tensor(4, output_len, input_len))
+        self.bs = nn.Parameter(torch.Tensor(4, output_len))
+
+        # Initialize control points
+        [nn.init.kaiming_uniform_(w, nonlinearity="relu") for w in self.ws]
+        [nn.init.zeros_(b) for b in self.bs]
+
+    def forward(self, input, p):
+        w = self.ws[0]  # catmul_rom(p, self.ws)
+        b = catmul_rom_bias(p, self.bs)
+        return F.linear(input, w, b)
+
+
+class InterpolatedLinear(nn.Module):
+    def __init__(self, in_features, out_features):
+        super(InterpolatedLinear, self).__init__()
+        # Two sets of weights and biases
+        self.weight1 = nn.Parameter(torch.Tensor(out_features, in_features))
+        self.weight2 = nn.Parameter(torch.Tensor(out_features, in_features))
+        self.bias1 = nn.Parameter(torch.Tensor(out_features))
+        self.bias2 = nn.Parameter(torch.Tensor(out_features))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        # Initialize weights and biases for both parameter sets
+        nn.init.kaiming_uniform_(self.weight1, a=np.sqrt(5))
+        nn.init.kaiming_uniform_(self.weight2, a=np.sqrt(5))
+        nn.init.zeros_(self.bias1)
+        nn.init.zeros_(self.bias2)
+
+    def forward(self, input, alpha):
+        """
+        Forward pass with interpolation.
+
+        Parameters:
+        - input: Input tensor (batch_size, in_features)
+        - alpha: Interpolation tensor (batch_size,) or scalar
+
+        Returns:
+        - Interpolated output tensor
+        """
+        # Ensure alpha is broadcastable
+        if len(alpha.shape) == 1:
+            alpha = alpha.view(-1, 1, 1)  # Reshape to (batch_size, 1, 1)
+
+        # Interpolate weights and biases
+        weight = (
+            alpha * self.weight1 + (1 - alpha) * self.weight2
+        )  # Shape: (batch_size, out_features, in_features)
+        bias = (
+            alpha.squeeze(-1) * self.bias1 + (1 - alpha.squeeze(-1)) * self.bias2
+        )  # Shape: (batch_size, out_features)
+
+        # Apply linear transformation
+        output = torch.bmm(input.unsqueeze(1), weight.transpose(1, 2)).squeeze(1) + bias
+        return output
 
 
 class PFNN(nn.Module):
-    def __init__(self, x_len, y_len):
+    def __init__(self, input_len, output_len):
         super(PFNN, self).__init__()
-        self.fc1 = nn.Linear(x_len, 512)
-        self.fc2 = nn.Linear(512, 512)
-        self.fc3 = nn.Linear(512, y_len)
+        self.fc1 = PhaseLinear(input_len, 512)
+        self.fc2 = PhaseLinear(512, 512)
+        self.fc3 = PhaseLinear(512, output_len)
 
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        x = self.fc3(x)
+    def forward(self, x, p):
+        x = F.relu(self.fc1(x, p))
+        x = F.relu(self.fc2(x, p))
+        x = self.fc3(x, p)
         return x
 
 
-DEBUG_COUNT = 500
 MAX_EPOCHS = 500
-BATCH_SIZE = 100
+BATCH_SIZE = 6
 VAL_DATASET_FACTOR = 0.1
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Error: expected mocap filename (without .bvh extension)")
+    if len(sys.argv) != 1:
+        print("Error: no arguments necessary")
         exit(1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"cuda.is_available() = {torch.cuda.is_available()}")
     print(f"device = {device}")
 
+    basis = torch.Tensor(
+        [
+            [-0.5, 1.5, -1.5, 0.5],
+            [1.0, -2.5, 2.0, -0.5],
+            [-0.5, 0.0, 0.5, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+        ]
+    ).to(device)
+
     # load dataset
-    mocap_basename = sys.argv[1]
-    full_dataset = MocapDataset(mocap_basename)
+    full_dataset = MocapDataset()
 
     VAL_DATASET_SIZE = int(len(full_dataset) * VAL_DATASET_FACTOR)
 
-    # instantiate model
-    x, y = full_dataset[0]
-    model = PFNN(x.shape[0], y.shape[0]).to(device)
-    criterion = nn.CrossEntropyLoss()
+    model = PFNN(full_dataset.X.shape[1], full_dataset.Y.shape[1]).to(device).to(device)
+
+    # print model
+    print("model =")
+    print(model)
+    print("parameters =")
+    for name, param in model.named_parameters():
+        print(f"    {name}, size = {param.size()}")
+
+    criterion = nn.L1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
     # split dataset into train and validation sets
@@ -124,8 +176,9 @@ if __name__ == "__main__":
     )
 
     print(f"len(full_dataset) = {len(full_dataset)}")
-    print(f"x.shape = {x.shape}")
-    print(f"y.shape = {y.shape}")
+    print(f"x.shape = {full_dataset.X.shape}, dtype={full_dataset.X.type()}")
+    print(f"y.shape = {full_dataset.Y.shape}, dtype={full_dataset.Y.type()}")
+    print(f"p.shape = {full_dataset.P.shape}, dtype={full_dataset.P.type()}")
 
     #
     # train
@@ -141,11 +194,11 @@ if __name__ == "__main__":
         train_loss = 0.0
         train_count = 0
 
-        for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
+        for x, y, p in train_loader:
+            x, y, p = x.to(device), y.to(device), p.to(device)
 
             optimizer.zero_grad()
-            output = model(x)
+            output = model(x, p)
             loss = criterion(output, y)
 
             train_loss += loss.item()
@@ -161,11 +214,11 @@ if __name__ == "__main__":
         val_count = 0
 
         with torch.no_grad():
-            for image, target in val_loader:
+            for x, y, p in val_loader:
                 # transfer tensors to gpu
-                x, y = x.to(device), y.to(device)
+                x, y, p = x.to(device), y.to(device), p.to(device)
 
-                output = model(x)
+                output = model(x, p)
                 loss = criterion(output, y)
                 val_loss += loss.item()
                 val_count += 1
