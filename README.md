@@ -1,6 +1,5 @@
 Implementation of PFNN
 -------------------------
-
 build_xforms.py - generates skeleton, world space xforms and world space root motion
 build_jointpva.py - generates root relative joint positions, velocities and angles (logmap)
 build_traj.py - generates 2d trajectory samples for each frame.

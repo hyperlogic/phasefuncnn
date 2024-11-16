@@ -25,6 +25,8 @@ mocap_paths = [
     "../PFNN/data/animations/LocomotionFlat12_000.bvh",
 ]
 
+#mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
+
 mocap_names = [os.path.splitext(os.path.basename(n))[0] for n in mocap_paths]
 
 
@@ -121,9 +123,11 @@ def task_build_tensors():
             OUTPUT_DIR / "X.pty",
             OUTPUT_DIR / "X_mean.pty",
             OUTPUT_DIR / "X_std.pty",
+            OUTPUT_DIR / "X_w.pty",
             OUTPUT_DIR / "Y.pty",
             OUTPUT_DIR / "Y_mean.pty",
             OUTPUT_DIR / "Y_std.pty",
+            OUTPUT_DIR / "Y_w.pty",
             OUTPUT_DIR / "P.pty",
         ],
         "actions": [
