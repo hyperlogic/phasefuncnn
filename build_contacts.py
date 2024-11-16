@@ -74,7 +74,7 @@ def build_phase(contacts):
                 keyframes.append([frame, phase, next_state])
             curr_state = next_state
 
-    phase = np.zeros(num_frames)
+    phase = np.zeros(num_frames, dtype=np.float32)
 
     MIN_STANDING_PERIOD = 0.25 * SAMPLE_RATE
 
