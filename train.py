@@ -29,16 +29,23 @@ class MocapDataset(torch.utils.data.Dataset):
         return self.X[idx], self.Y[idx], self.P[idx]
 
 
-def catmul_rom_bias(phase, bias):
-    assert bias.shape[0] == 4
+def phase_function(phase, weights, biases):
+    assert biases.shape[0] == 4
+    assert weights.shape[0] == 4
     t = (4 * phase) / (2 * np.pi) % 1.0
     tt = torch.zeros([t.shape[0], 4]).to(device)
     tt[:, 0] = t**3
     tt[:, 1] = t**2
     tt[:, 2] = t
     tt[:, 3] = 1
-    result = tt @ basis @ bias
-    return result
+    print(f"weights.shape = {weights.shape}")
+    w = tt @ catmull_rom_basis @ weights.view(4, -1)
+    b = tt @ catmull_rom_basis @ biases
+    print(f"tt.shape = {tt.shape}")
+    print(f"basis.shape = {catmull_rom_basis.shape}")
+    print(f"weights.view(4, -1).shape = {weights.view(4, -1).shape}")
+    print(f"w.shape = {w.shape}")
+    return w.view(phase.shape[0], weights.shape[1], weights.shape[2]), b
 
 
 class PhaseLinear(nn.Module):
@@ -54,9 +61,11 @@ class PhaseLinear(nn.Module):
         [nn.init.zeros_(b) for b in self.bs]
 
     def forward(self, input, p):
-        w = self.ws[0]  # catmul_rom(p, self.ws)
-        b = catmul_rom_bias(p, self.bs)
-        return F.linear(input, w, b)
+        # w, b = phase_function(p, self.ws, self.bs)
+        result = F.linear(input, self.ws[0], self.bs[0])
+        #print(f"result {result.shape} = F.linear(input {input.shape}, w {self.ws[0].shape}, b {self.bs[0].shape}")
+
+        return result
 
 
 class InterpolatedLinear(nn.Module):
@@ -131,7 +140,7 @@ if __name__ == "__main__":
     print(f"cuda.is_available() = {torch.cuda.is_available()}")
     print(f"device = {device}")
 
-    basis = torch.Tensor(
+    catmull_rom_basis = torch.Tensor(
         [
             [-0.5, 1.5, -1.5, 0.5],
             [1.0, -2.5, 2.0, -0.5],

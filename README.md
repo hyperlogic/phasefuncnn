@@ -68,6 +68,9 @@ BUILD
 
 TRAIN
 ----------
+* catmull rom
+  * unravel/ravel (for weights)
+  * control point shift...
 * correct loss function
 * phase function of cubic catmull rom
 * dropout layers
