@@ -4,6 +4,7 @@ torch
 bvh
 bvhio
 glfw
+gltflib
 tqdm
 pygfx
 doit
