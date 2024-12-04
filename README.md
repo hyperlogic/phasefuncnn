@@ -27,8 +27,25 @@ intermediate data files
 *_contacts.npy - np.ndarray of shape (num_frames, 4) [0:4] (lfoot, rfoot, ltoe, rtoe) - 1 if foot is in contact with ground.
 *_phase.npy - np.ndarray of shape (num_frames) phase of each frame. [0, 2*pi)
 
+final output
+-----------------
+Open questions:
+Do take mean and std_dev before or after normalization? (before)
+Do need to apply importance scaling to output (no)
 
-Input tensor
+X.pth - torch input tensor
+X_mean.pth - mean of input tensor
+X_std.pth - standard deviation of input tensor
+X_w.pth - weights used to reduce importance of joint features
+
+Y.pth - torch output tensor
+Y_mean.pth - mean of output tensor
+Y_std.pth - standard deviation of output tensor
+
+P.pth - phase tensor
+
+
+Input tensor (X.pth)
 ------------
 x = { trajpd_i trajd_i jointp_i-1 jointv_i-1f }
 
@@ -37,8 +54,10 @@ jointpv_i-1 - NUM_JOINTS * 6 floats total
 
 shape = (num_rows, TRAJ_WINDOW_SIZE * 4 + num_joints * 6)
 
+x is then normalized and weighted
 
-Output tensor
+
+Output tensor (Y.pth)
 -------------------
 y = { trajp_i+1 trajd_i+1 jointp_i jointv_i jointa_i rootvel_i, phasevel_i, contacts_i }
 
@@ -50,7 +69,10 @@ contacts_i - 4 floats
 
 shape = (num_rows, TRAJ_WINDOW_SIZE * 4 + num_joints * 9 + 9)
 
-Phase tensor
+y is then normalized
+
+
+Phase tensor (P.pth)
 -----------------
 phase_i-1 - 1 float
 
@@ -62,7 +84,8 @@ BUILD
 -----------
 * normalization of inputs -
   In build process, generate ALL data as a tensor.
-  * normalize and importance scale ALL data during this process.
+  * normalize and importance scale input
+  * normalize output
   * resulting in X, Y and P tensors
 * make sure concatination of all mocap files works.
 

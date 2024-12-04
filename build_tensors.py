@@ -132,11 +132,9 @@ if __name__ == "__main__":
     jointpv_size = num_joints * 6
     jointpva_size = num_joints * 9
 
-    # use weights to reduce the importance of joint features by 10 percent
+    # use weights to reduce the importance of input joint features by 10 percent
     X_w = torch.ones((X.shape[1],))
     X_w[traj_size : traj_size + jointpv_size] = 0.1
-    Y_w = torch.ones((Y.shape[1],))
-    Y_w[traj_size : traj_size + jointpva_size] = 0.1
 
     X_mean, Y_mean = X.mean(dim=0), Y.mean(dim=0)
 
@@ -146,7 +144,7 @@ if __name__ == "__main__":
 
     # normalize and weight the importance of each feature
     X = (X - X_mean) / (X_w * X_std)
-    Y = (Y - Y_mean) / (Y_w * Y_std)
+    Y = (Y - Y_mean) / Y_std
 
     print(
         f"X.shape = {X.shape}, X_mean.shape = {X_mean.shape}, X_std.shape = {X_std.shape}"
@@ -171,6 +169,5 @@ if __name__ == "__main__":
     torch.save(Y, os.path.join(OUTPUT_DIR, "Y.pth"))
     torch.save(Y_mean, os.path.join(OUTPUT_DIR, "Y_mean.pth"))
     torch.save(Y_std, os.path.join(OUTPUT_DIR, "Y_std.pth"))
-    torch.save(Y_w, os.path.join(OUTPUT_DIR, "Y_w.pth"))
 
     torch.save(P, os.path.join(OUTPUT_DIR, "P.pth"))

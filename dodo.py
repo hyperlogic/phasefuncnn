@@ -25,10 +25,9 @@ mocap_paths = [
     "../PFNN/data/animations/LocomotionFlat12_000.bvh",
 ]
 
-#mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
+mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
 
 mocap_names = [os.path.splitext(os.path.basename(n))[0] for n in mocap_paths]
-
 
 def out_deps(basename, filenames):
     return [OUTPUT_DIR / f"{basename}_{filename}" for filename in filenames]
@@ -120,15 +119,14 @@ def task_build_tensors():
     return {
         "file_dep": file_deps,
         "targets": [
-            OUTPUT_DIR / "X.pty",
-            OUTPUT_DIR / "X_mean.pty",
-            OUTPUT_DIR / "X_std.pty",
-            OUTPUT_DIR / "X_w.pty",
-            OUTPUT_DIR / "Y.pty",
-            OUTPUT_DIR / "Y_mean.pty",
-            OUTPUT_DIR / "Y_std.pty",
-            OUTPUT_DIR / "Y_w.pty",
-            OUTPUT_DIR / "P.pty",
+            OUTPUT_DIR / "X.pth",
+            OUTPUT_DIR / "X_mean.pth",
+            OUTPUT_DIR / "X_std.pth",
+            OUTPUT_DIR / "X_w.pth",
+            OUTPUT_DIR / "Y.pth",
+            OUTPUT_DIR / "Y_mean.pth",
+            OUTPUT_DIR / "Y_std.pth",
+            OUTPUT_DIR / "P.pth",
         ],
         "actions": [
             CmdAction(f"python build_tensors.py {' '.join(mocap_names)}", buffering=1)
