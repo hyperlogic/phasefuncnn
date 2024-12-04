@@ -28,9 +28,7 @@ def orient_line_from_pv(line, pos, vel):
 
 
 class RenderBuddy:
-    def __init__(
-        self, skeleton, xforms, root, jointpva, traj, contacts, phase, rootvel
-    ):
+    def __init__(self, skeleton, xforms, root, jointpva, traj, contacts, phase, rootvel):
         self.start_frame = 0
         self.end_frame = sys.maxsize
         self.curr_frame = self.start_frame
@@ -66,9 +64,7 @@ class RenderBuddy:
 
         if self.draw_root:
             # add a disc (flattened sphere) to display the root motion
-            self.root_sphere = gfx.Mesh(
-                gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#aaaaff")
-            )
+            self.root_sphere = gfx.Mesh(gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#aaaaff"))
             self.root_sphere.local.scale = [2, 0.01, 2]
             self.root_group.add(self.root_sphere)
 
@@ -119,13 +115,9 @@ class RenderBuddy:
         # add a line for rendering phase as a clock
         if self.draw_phase:
             self.clock_group = gfx.Group()
-            clock_hand = gfx.Mesh(
-                gfx.box_geometry(0.1, 1, 0.1), gfx.MeshPhongMaterial(color="#ffffff")
-            )
+            clock_hand = gfx.Mesh(gfx.box_geometry(0.1, 1, 0.1), gfx.MeshPhongMaterial(color="#ffffff"))
             clock_hand.local.position = [0, 0.5, 0]
-            clock_dial = gfx.Mesh(
-                gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#0000ff")
-            )
+            clock_dial = gfx.Mesh(gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#0000ff"))
             clock_dial.local.scale = [1, 1, 0.001]
             self.clock_group.add(clock_hand)
             self.clock_group.add(clock_dial)
@@ -145,20 +137,14 @@ class RenderBuddy:
                     gfx.LineMaterial(thickness=1.0, color="#00ff00"),
                 )
                 FUDGE = 20  # make the angular vels longer to visualize them better
-                orient_line_from_pv(
-                    l, positions[i], FUDGE * np.array([0, self.rootvel[i][2], 0])
-                )
+                orient_line_from_pv(l, positions[i], FUDGE * np.array([0, self.rootvel[i][2], 0]))
                 self.scene.add(l)
 
         self.canvas = WgpuCanvas()
         self.renderer = gfx.renderers.WgpuRenderer(self.canvas)
-        self.controller = gfx.OrbitController(
-            camera=self.camera, register_events=self.renderer
-        )
+        self.controller = gfx.OrbitController(camera=self.camera, register_events=self.renderer)
 
-        self.renderer.add_event_handler(
-            lambda event: self.on_key_down(event), "key_down"
-        )
+        self.renderer.add_event_handler(lambda event: self.on_key_down(event), "key_down")
 
         self.canvas.request_draw(lambda: self.animate())
 
@@ -208,8 +194,14 @@ class RenderBuddy:
             for i in range(TRAJ_WINDOW_SIZE):
                 axes = self.traj_axes[i]
                 o = i * TRAJ_ELEMENT_SIZE
-                axes.local.position = [traj[self.curr_frame][o], 0, traj[self.curr_frame][o + 1]]
-                axes.local.rotation = orient_towards(np.array([traj[self.curr_frame][o + 2], 0, traj[self.curr_frame][o + 3]]))
+                axes.local.position = [
+                    traj[self.curr_frame][o],
+                    0,
+                    traj[self.curr_frame][o + 1],
+                ]
+                axes.local.rotation = orient_towards(
+                    np.array([traj[self.curr_frame][o + 2], 0, traj[self.curr_frame][o + 3]])
+                )
 
         # animate phase
         if self.draw_phase:
@@ -249,7 +241,5 @@ if __name__ == "__main__":
     phase = np.load(outbasepath + "_phase.npy")
     rootvel = np.load(outbasepath + "_rootvel.npy")
 
-    renderBuddy = RenderBuddy(
-        skeleton, xforms, root, jointpva, traj, contacts, phase, rootvel
-    )
+    renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva, traj, contacts, phase, rootvel)
     run()

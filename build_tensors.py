@@ -18,7 +18,6 @@ TRAJ_ELEMENT_SIZE = 4  # (px, pz, vx, vz)
 
 
 def build_tensors(skeleton, root, jointva, traj, rootvel, contacts):
-
     num_joints = skeleton.num_joints
     num_rows = root.shape[0] - 2  # skip the first and last frame
     t = (1 / SAMPLE_RATE) * 2
@@ -146,12 +145,8 @@ if __name__ == "__main__":
     X = (X - X_mean) / (X_w * X_std)
     Y = (Y - Y_mean) / Y_std
 
-    print(
-        f"X.shape = {X.shape}, X_mean.shape = {X_mean.shape}, X_std.shape = {X_std.shape}"
-    )
-    print(
-        f"Y.shape = {Y.shape}, Y_mean.shape = {Y_mean.shape}, Y_std.shape = {Y_std.shape}"
-    )
+    print(f"X.shape = {X.shape}, X_mean.shape = {X_mean.shape}, X_std.shape = {X_std.shape}")
+    print(f"Y.shape = {Y.shape}, Y_mean.shape = {Y_mean.shape}, Y_std.shape = {Y_std.shape}")
     print(f"P.shape = {P.shape}")
     print(f"X_mean = {X_mean}")
     print(f"X_std = {X_std}")

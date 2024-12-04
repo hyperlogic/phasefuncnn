@@ -29,6 +29,7 @@ mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
 
 mocap_names = [os.path.splitext(os.path.basename(n))[0] for n in mocap_paths]
 
+
 def out_deps(basename, filenames):
     return [OUTPUT_DIR / f"{basename}_{filename}" for filename in filenames]
 
@@ -36,9 +37,7 @@ def out_deps(basename, filenames):
 def get_python_files_in_module(module_name):
     result = []
     module = importlib.import_module(module_name)
-    for importer, mod_name, is_pkg in pkgutil.walk_packages(
-        module.__path__, module_name + "."
-    ):
+    for importer, mod_name, is_pkg in pkgutil.walk_packages(module.__path__, module_name + "."):
         if not is_pkg:
             result.append(mod_name.replace(".", "/") + ".py")
     return result
@@ -66,8 +65,7 @@ def task_build_jointpva():
     for name in mocap_names:
         yield {
             "name": name,
-            "file_dep": code_deps
-            + out_deps(name, ["skeleton.pkl", "xforms.npy", "root.npy"]),
+            "file_dep": code_deps + out_deps(name, ["skeleton.pkl", "xforms.npy", "root.npy"]),
             "targets": out_deps(name, ["jointpva.npy"]),
             "actions": [f"python build_jointpva.py {name}"],
             "clean": True,
@@ -128,8 +126,6 @@ def task_build_tensors():
             OUTPUT_DIR / "Y_std.pth",
             OUTPUT_DIR / "P.pth",
         ],
-        "actions": [
-            CmdAction(f"python build_tensors.py {' '.join(mocap_names)}", buffering=1)
-        ],
+        "actions": [CmdAction(f"python build_tensors.py {' '.join(mocap_names)}", buffering=1)],
         "clean": True,
     }

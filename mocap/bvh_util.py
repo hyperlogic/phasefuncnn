@@ -8,7 +8,6 @@ from tqdm import trange, tqdm
 
 
 def build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame):
-
     m = np.eye(4)
     pi_180 = math.pi / 180
 
@@ -39,12 +38,9 @@ def build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame):
 
 
 def build_xforms_from_bvh(bvh, skeleton, sample_rate):
-
     # sample the mocap data at the desired sample rate
     bvh_sample_rate = round(1 / bvh.frame_time)
-    assert (
-        bvh_sample_rate % sample_rate
-    ) == 0  # mocap_sample_rate must be a multiple of DESIRED_SAMPLE_RATE
+    assert (bvh_sample_rate % sample_rate) == 0  # mocap_sample_rate must be a multiple of DESIRED_SAMPLE_RATE
     sample_step = int(bvh_sample_rate / sample_rate)
 
     # Create an array of identity matrices with shape (num_frames, num_joints, 4, 4)

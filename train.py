@@ -16,7 +16,6 @@ TRAJ_ELEMENT_SIZE = 4
 
 class MocapDataset(torch.utils.data.Dataset):
     def __init__(self):
-
         # unpickle skeleton, xforms, jointpva
         self.X = torch.load(OUTPUT_DIR / "X.pth", weights_only=True)
         self.Y = torch.load(OUTPUT_DIR / "Y.pth", weights_only=True)
@@ -63,7 +62,7 @@ class PhaseLinear(nn.Module):
     def forward(self, input, p):
         # w, b = phase_function(p, self.ws, self.bs)
         result = F.linear(input, self.ws[0], self.bs[0])
-        #print(f"result {result.shape} = F.linear(input {input.shape}, w {self.ws[0].shape}, b {self.bs[0].shape}")
+        # print(f"result {result.shape} = F.linear(input {input.shape}, w {self.ws[0].shape}, b {self.bs[0].shape}")
 
         return result
 
@@ -101,9 +100,7 @@ class InterpolatedLinear(nn.Module):
             alpha = alpha.view(-1, 1, 1)  # Reshape to (batch_size, 1, 1)
 
         # Interpolate weights and biases
-        weight = (
-            alpha * self.weight1 + (1 - alpha) * self.weight2
-        )  # Shape: (batch_size, out_features, in_features)
+        weight = alpha * self.weight1 + (1 - alpha) * self.weight2  # Shape: (batch_size, out_features, in_features)
         bias = (
             alpha.squeeze(-1) * self.bias1 + (1 - alpha.squeeze(-1)) * self.bias2
         )  # Shape: (batch_size, out_features)
@@ -177,12 +174,8 @@ if __name__ == "__main__":
     )
     torch.manual_seed(torch.initial_seed())
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0
-    )
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0
-    )
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
 
     print(f"len(full_dataset) = {len(full_dataset)}")
     print(f"x.shape = {full_dataset.X.shape}, dtype={full_dataset.X.type()}")
@@ -239,9 +232,7 @@ if __name__ == "__main__":
         else:
             epochs_without_improvement += 1
 
-        print(
-            f"Epoch {epoch+1}: Training Loss = {avg_train_loss}, Validation Loss = {avg_val_loss}"
-        )
+        print(f"Epoch {epoch+1}: Training Loss = {avg_train_loss}, Validation Loss = {avg_val_loss}")
 
         if epochs_without_improvement >= max_epochs_without_improvement:
             print("Early stopping triggered. Stopping training.")

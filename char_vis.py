@@ -41,29 +41,32 @@ gfx.OrbitController(camera, register_events=renderer)
 global_time = 0.0
 last_time = time.perf_counter()
 global_frame = 0
-num_frames = len(anim['tracks'][0]['times'])
+num_frames = len(anim["tracks"][0]["times"])
 
 stats = gfx.Stats(viewport=renderer)
 
+
 def copy_anim_to_skeleton(frame, anim, skeleton):
     # TODO: do linear interpolation of keyframes
-    for track in anim['tracks']:
-        property = track['property']
-        times = track['times']
-        target = track['target']
-        values = track['values']
+    for track in anim["tracks"]:
+        property = track["property"]
+        times = track["times"]
+        target = track["target"]
+        values = track["values"]
         if frame < len(values):
-            if property == 'rotation':
+            if property == "rotation":
                 target.local.rotation = values[frame]
-            elif property == 'translation':
+            elif property == "translation":
                 target.local.position = values[frame]
-            elif property == 'scale':
+            elif property == "scale":
                 target.local.scale = values[frame]
-        #else:
-            #print(f"bad frame {frame} for track {track['name']}, len = {len(values)}, times = {times}")
+        # else:
+        # print(f"bad frame {frame} for track {track['name']}, len = {len(values)}, times = {times}")
 
-#s = gfx.Skeleton([], [])
-#s.bones[0].local.position = xx
+
+# s = gfx.Skeleton([], [])
+# s.bones[0].local.position = xx
+
 
 def animate():
     global global_time, last_time, anim, global_frame, num_frames
