@@ -2,10 +2,12 @@
 #
 #
 
+import math
 import os
 import time
 from pathlib import Path
 
+import numpy as np
 import pygfx as gfx
 from wgpu.gui.auto import WgpuCanvas, run
 
@@ -36,6 +38,8 @@ skeleton_helper = gfx.SkeletonHelper(model_obj)
 scene.add(skeleton_helper)
 scene.add(model_obj)
 
+scene.add(gfx.helpers.GridHelper(size=1000))
+
 gfx.OrbitController(camera, register_events=renderer)
 
 global_time = 0.0
@@ -45,6 +49,10 @@ num_frames = len(anim["tracks"][0]["times"])
 
 stats = gfx.Stats(viewport=renderer)
 
+
+def wiggle(t, min, max):
+    assert min <= max
+    return ((np.sin(t) + 1) / 2) * (max - min) + min
 
 def copy_anim_to_skeleton(frame, anim, skeleton):
     # TODO: do linear interpolation of keyframes
@@ -57,7 +65,7 @@ def copy_anim_to_skeleton(frame, anim, skeleton):
             if property == "rotation":
                 target.local.rotation = values[frame]
             elif property == "translation":
-                target.local.position = values[frame]
+                target.local.position = np.array(values[frame])
             elif property == "scale":
                 target.local.scale = values[frame]
         # else:
