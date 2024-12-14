@@ -80,14 +80,18 @@ shape = (num_rows, 1)
 
 TODO:
 -------------------------
+VISUALIZE
+-----------
+* render output tensors, i.e. the result after inference
+
 BUILD
 -----------
-* normalization of inputs -
+* DONE: normalization of inputs -
   In build process, generate ALL data as a tensor.
   * normalize and importance scale input
   * normalize output
   * resulting in X, Y and P tensors
-* make sure concatination of all mocap files works.
+* DONE: make sure concatination of all mocap files works.
 
 TRAIN
 ----------
