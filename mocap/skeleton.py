@@ -2,6 +2,15 @@ import bvh
 
 
 class Skeleton:
+    joint_names: list[str]
+    root_name: str
+    joint_index_map: dict[str, int]
+    has_pos_map: dict[str, bool]
+    has_rot_map: dict[str, bool]
+    parent_map: dict[str, int]
+    joint_offset_map: dict[str, list[float]]
+    num_joints: int
+
     def __init__(self, bvh):
         self.joint_names = bvh.get_joints_names()
         self.root_name = self.joint_names[0]
@@ -13,29 +22,25 @@ class Skeleton:
         self.num_joints = len(self.joint_names)
         self.build_mirror_map()
 
-    @property
-    def num_joints(self) -> int:
-        return len(self.joint_names)
-
-    def is_root(self, joint_name):
+    def is_root(self, joint_name: str) -> bool:
         return joint_name == self.root_name
 
-    def get_joint_name(self, joint_index):
+    def get_joint_name(self, joint_index: int) -> str:
         return self.joint_names[joint_index]
 
-    def get_joint_index(self, joint_name):
+    def get_joint_index(self, joint_name: str) -> int:
         return self.joint_index_map.get(joint_name, -1)
 
-    def get_parent_index(self, joint_name):
+    def get_parent_index(self, joint_name: str) -> int:
         return self.parent_map[joint_name]
 
-    def has_pos(self, joint_name):
+    def has_pos(self, joint_name: str) -> bool:
         return self.has_pos_map[joint_name]
 
-    def has_rot(self, joint_name):
+    def has_rot(self, joint_name: str) -> bool:
         return self.has_rot_map[joint_name]
 
-    def get_joint_offset(self, joint_name):
+    def get_joint_offset(self, joint_name: str) -> list[float]:
         return self.joint_offset_map[joint_name]
 
     def build_mirror_map(self):
