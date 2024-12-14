@@ -13,6 +13,10 @@ class Skeleton:
         self.num_joints = len(self.joint_names)
         self.build_mirror_map()
 
+    @property
+    def num_joints(self) -> int:
+        return len(self.joint_names)
+
     def is_root(self, joint_name):
         return joint_name == self.root_name
 
