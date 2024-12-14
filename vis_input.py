@@ -14,9 +14,11 @@ OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 
+
 class ColumnView(TypedDict):
     size: int
     indices: list[int]
+
 
 class InputView(TypedDict):
     traj_pos_i: ColumnView
@@ -25,10 +27,108 @@ class InputView(TypedDict):
     joint_vel_im1: ColumnView
 
 
+def ref(row: torch.Tensor, input_view: InputView, key: str, index: str) -> torch.Tensor:
+    index = input_view[key]["indices"][index]
+    size = input_view[key]["size"]
+    return row[index : index + size]
+
+
 class RenderBuddy:
-    def __init__(self, skeleton: mocap.Skeleton, input_view: InputView):
+    skeleton: mocap.Skeleton
+    input_view: InputView
+    X: torch.Tensor
+    scene: gfx.Group
+    row_group: gfx.Group
+    row: int
+    camera: gfx.PerspectiveCamera
+    canvas: WgpuCanvas
+    renderer: gfx.renderers.WgpuRenderer
+    controller: gfx.OrbitController
+    playing: bool
+
+    def __init__(self, skeleton: mocap.Skeleton, input_view: InputView, X: torch.Tensor):
         self.skeleton = skeleton
         self.input_view = input_view
+        self.X = X
+
+        self.scene = gfx.Scene()
+        self.scene.add(gfx.AmbientLight(intensity=1))
+        self.scene.add(gfx.DirectionalLight())
+        self.scene.add(gfx.helpers.AxesHelper(10.0, 0.5))
+        self.scene.add(gfx.helpers.GridHelper(size=100))
+
+        self.row_group = gfx.Group()
+        self.scene.add(self.row_group)
+
+        self.camera = gfx.PerspectiveCamera(70, 4 / 3)
+        self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
+
+        self.canvas = WgpuCanvas()
+        self.renderer = gfx.renderers.WgpuRenderer(self.canvas)
+        self.controller = gfx.OrbitController(camera=self.camera, register_events=self.renderer)
+
+        self.renderer.add_event_handler(lambda event: self.on_key_down(event), "key_down")
+
+        self.canvas.request_draw(lambda: self.animate())
+
+        self.playing = False
+        self.retain_row(0)
+
+    def retain_row(self, row: int):
+        self.row = row
+        self.scene.remove(self.row_group)
+        self.row_group = gfx.Group()
+
+        positions = []
+        colors = []
+        X_row = self.X[row]
+        for child in skeleton.joint_names:
+            child_index = skeleton.get_joint_index(child)
+            parent_index = skeleton.get_parent_index(child)
+            if parent_index >= 0:
+                # line from p.offset
+                p0 = ref(X_row, self.input_view, "joint_pos_im1", parent_index).tolist()
+                p1 = ref(X_row, self.input_view, "joint_pos_im1", child_index).tolist()
+                positions += [p0, p1]
+                colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
+        joint_line = gfx.Line(
+            gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+        )
+
+        positions = []
+        colors = []
+        for i in range(TRAJ_WINDOW_SIZE - 1):
+            p0 = ref(X_row, self.input_view, "traj_pos_i", i)
+            p1 = ref(X_row, self.input_view, "traj_pos_i", i + 1)
+            positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
+            if i % 2 == 0:
+                colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
+            else:
+                colors += [[1, 0, 0, 1], [1, 0, 0, 1]]
+
+        traj_line = gfx.Line(
+            gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+        )
+
+        self.row_group.add(joint_line)
+        self.row_group.add(traj_line)
+        self.scene.add(self.row_group)
+
+    def animate(self):
+        if self.playing:
+            row = self.row + 1
+            if row >= self.X.shape[0]:
+                row = 0
+            self.retain_row(row)
+
+        self.renderer.render(self.scene, self.camera)
+        self.canvas.request_draw()
+
+    def on_key_down(self, event):
+        if event.key == "Escape":
+            self.renderer.target.close()
+        elif event.key == " ":
+            self.playing = not self.playing
 
 
 def build_column_indices(start: int, stride: int, repeat: int = 1) -> Tuple[int, list[int]]:
@@ -73,7 +173,16 @@ if __name__ == "__main__":
 
     print(f"skeleton.num_joints = {skeleton.num_joints}")
     X = torch.load(os.path.join(OUTPUT_DIR, "X.pth"), weights_only=True)
+    X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True)
+    X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
+    X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
     print(f"X.shape = {X.shape}")
 
     num_cols = input_view["joint_vel_im1"]["indices"][-1] + input_view["joint_vel_im1"]["size"]
     assert num_cols == X.shape[1]
+
+    # un-normalize input for visualiztion
+    X = (X * (X_std * X_w)) + X_mean
+
+    renderBuddy = RenderBuddy(skeleton, input_view, X)
+    run()
