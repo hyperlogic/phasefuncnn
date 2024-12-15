@@ -188,6 +188,39 @@ def quat_mirror(quat):
     return np.array([quat[0], -quat[1], -quat[2], quat[3]])
 
 
+def quat_conj(q: np.ndarray) -> np.ndarray:
+    return np.array([-q[0], -q[1], -q[2], q[3]])
+
+
+def quat_mul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """
+    quaternion multiplication
+    """
+    x1, y1, z1, w1 = a[0], a[1], a[2], a[3]
+    x2, y2, z2, w2 = b[0], b[1], b[2], b[3]
+
+    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+    y = w1 * y2 + y1 * w2 + z1 * x2 - x1 * z2
+    z = w1 * z2 + z1 * w2 + x1 * y2 - y1 * x2
+
+    return np.array([x, y, z, w])
+
+
+def quat_rotate(q: np.ndarray, vector: np.ndarray) -> np.ndarray:
+    vq = np.array([vector[0], vector[1], vector[2], 0])
+    return quat_mul(quat_mul(q, vq), quat_conj(q))[0:3]
+
+
+def quat_from_angle_axis(theta: float, axis: np.ndarray) -> np.ndarray:
+    axis = axis / np.linalg.norm(axis)
+    if np.abs(theta) < 1e-6:
+        return np.array([0, 0, 0, 1])
+    half_theta = theta * 0.5
+    img = math.sin(half_theta) * axis
+    return np.array([img[0], img[1], img[2], math.cos(half_theta)])
+
+
 def mat_mirror(m):
     mm = np.eye(4)
     build_mat_from_quat(mm, quat_mirror(quat_from_mat(m)))
