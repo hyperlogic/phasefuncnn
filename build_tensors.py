@@ -142,7 +142,7 @@ if __name__ == "__main__":
     X_std, Y_std = X.std(dim=0) + epsilon, Y.std(dim=0) + epsilon
 
     # normalize and weight the importance of each feature
-    X = (X - X_mean) / (X_w * X_std)
+    X = (X - X_mean) * (X_w / X_std)
     Y = (Y - Y_mean) / Y_std
 
     print(f"X.shape = {X.shape}, X_mean.shape = {X_mean.shape}, X_std.shape = {X_std.shape}")
