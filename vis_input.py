@@ -6,6 +6,7 @@ from time import perf_counter
 
 import numpy as np
 import pygfx as gfx
+import flycam
 import torch
 from wgpu.gui.auto import WgpuCanvas, run
 
@@ -20,52 +21,6 @@ TRAJ_ELEMENT_SIZE = 4
 def unpickle_obj(filename):
     with open(filename, "rb") as f:
         return pickle.load(f)
-
-
-class FlyCam:
-    """FUCK gfx.Controller what a hellscape"""
-
-    speed: float  # units per second
-    rotSpeed: float  # radians per second
-    worldUp: np.ndarray  # vec3
-    pos: np.ndarray  # vec3
-    vel: np.ndarray  # vec3
-    rot: np.ndarray  # quat xyzw
-    camera_mat: np.ndarray  # 4x4
-
-    def __init__(self, world_up: np.ndarray, pos: np.ndarray, rot: np.ndarray, speed: float, rot_speed: float):
-        self.world_up = world_up
-        self.pos = pos
-        self.rot = rot
-        self.vel = np.array([0, 0, 0])
-        self.speed = speed
-        self.rot_speed = rot_speed
-        self.camera_mat = np.eye(4)
-
-    def process(self, dt: float, left_stick: np.ndarray, right_stick: np.ndarray, roll_amount: float, up_amount: float):
-        STIFF = 100.0
-        K = STIFF / self.speed
-
-        # left_stick and up_amount control position
-        stick = mu.quat_rotate(self.rot, np.array([left_stick[0], up_amount, -left_stick[1]]))
-        s_over_k = (stick * STIFF) / K
-        s_over_k_sq = (stick * STIFF) / (K * K)
-        e_neg_kt = np.exp(-K * dt)
-        v = s_over_k + e_neg_kt * (self.vel - s_over_k)
-        self.pos = s_over_k * dt + (s_over_k_sq - self.vel / K) * e_neg_kt + self.pos - s_over_k_sq + (self.vel / K)
-        self.vel = v
-
-        # right_stick and roll_amount control rotation
-        right = mu.quat_rotate(self.rot, np.array([1, 0, 0]))
-        forward = mu.quat_rotate(self.rot, np.array([0, 0, -1]))
-        yaw = mu.quat_from_angle_axis(self.rot_speed * dt * -right_stick[0], self.world_up)
-        pitch = mu.quat_from_angle_axis(self.rot_speed * dt * right_stick[1], right)
-        rot = mu.quat_mul(mu.quat_mul(yaw, pitch), self.rot)
-
-        # TODO apply roll
-        # TODO compute cam_mat, such that world_up remains
-        # TODO decompese cam_mat into rot
-        self.rot = rot
 
 
 class ColumnView(TypedDict):
@@ -96,7 +51,7 @@ class RenderBuddy:
     camera: gfx.PerspectiveCamera
     canvas: WgpuCanvas
     renderer: gfx.renderers.WgpuRenderer
-    fly_cam: FlyCam
+    flycam: flycam.FlyCam
     playing: bool
     last_tick_time: float
     left_stick: np.ndarray
@@ -127,7 +82,7 @@ class RenderBuddy:
         self.renderer = gfx.renderers.WgpuRenderer(self.canvas)
         MOVE_SPEED = 30.5
         ROT_SPEED = 1.15
-        self.fly_cam = FlyCam(np.array([0, 1, 0]), np.array([0, 10, 50]), np.array([0, 0, 0, 1]), MOVE_SPEED, ROT_SPEED)
+        self.flycam = flycam.FlyCam(np.array([0, 1, 0]), np.array([0, 10, 50]), np.array([0, 0, 0, 1]), MOVE_SPEED, ROT_SPEED)
 
         self.renderer.add_event_handler(lambda event: self.on_key_down(event), "key_down")
         self.renderer.add_event_handler(lambda event: self.on_key_up(event), "key_up")
@@ -236,8 +191,8 @@ class RenderBuddy:
         roll_amount = 0
         up_amount = 0
 
-        self.fly_cam.process(dt, self.left_stick, self.right_stick, roll_amount, up_amount)
-        self.camera.set_state({"position": self.fly_cam.pos, "rotation": self.fly_cam.rot})
+        self.flycam.process(dt, self.left_stick, self.right_stick, roll_amount, up_amount)
+        self.camera.set_state({"position": self.flycam.pos, "rotation": self.flycam.rot})
 
 
 def build_column_indices(start: int, stride: int, repeat: int = 1) -> Tuple[int, list[int]]:
