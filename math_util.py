@@ -3,6 +3,10 @@ import numpy as np
 import pickle
 
 
+def normalize(v: np.ndarray) -> np.ndarray:
+    return v / np.linalg.norm(v)
+
+
 def expmap(v):
     """convert a rotation expressed in r^3 to a unit quaternion"""
     theta = np.linalg.norm(v)
