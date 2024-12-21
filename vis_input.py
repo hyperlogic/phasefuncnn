@@ -12,6 +12,7 @@ from wgpu.gui.auto import WgpuCanvas, run
 
 import math_util as mu
 from skeleton import Skeleton
+from renderbuddy import RenderBuddy
 
 OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
@@ -41,54 +42,33 @@ def ref(row: torch.Tensor, input_view: InputView, key: str, index: str) -> torch
     return row[index : index + size]
 
 
-class RenderBuddy:
+class VisInputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
     input_view: InputView
     X: torch.Tensor
-    scene: gfx.Group
     row_group: gfx.Group
     row: int
     camera: gfx.PerspectiveCamera
     canvas: WgpuCanvas
-    renderer: gfx.renderers.WgpuRenderer
-    flycam: flycam.FlyCam
+
+    #renderer: gfx.renderers.WgpuRenderer
+    #flycam: flycam.FlyCam
     playing: bool
-    last_tick_time: float
-    left_stick: np.ndarray
-    right_stick: np.ndarray
+    #last_tick_time: float
+    #left_stick: np.ndarray
+    #right_stick: np.ndarray
 
     def __init__(self, skeleton: Skeleton, input_view: InputView, X: torch.Tensor):
-        self.last_tick_time = perf_counter()
-        self.left_stick = np.array([0, 0])
-        self.right_stick = np.array([0, 0])
+        super().__init__()
 
         self.skeleton = skeleton
         self.input_view = input_view
         self.X = X
 
-        self.scene = gfx.Scene()
-        self.scene.add(gfx.AmbientLight(intensity=1))
-        self.scene.add(gfx.DirectionalLight())
-        self.scene.add(gfx.helpers.AxesHelper(10.0, 0.5))
-        self.scene.add(gfx.helpers.GridHelper(size=100))
-
         self.row_group = gfx.Group()
         self.scene.add(self.row_group)
 
-        self.camera = gfx.PerspectiveCamera(70, 4 / 3)
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
-
-        self.canvas = WgpuCanvas()
-        self.renderer = gfx.renderers.WgpuRenderer(self.canvas)
-        MOVE_SPEED = 30.5
-        ROT_SPEED = 1.15
-        self.flycam = flycam.FlyCam(np.array([0, 1, 0]), np.array([0, 10, 50]), np.array([0, 0, 0, 1]), MOVE_SPEED, ROT_SPEED)
-
-        self.renderer.add_event_handler(lambda event: self.on_key_down(event), "key_down")
-        self.renderer.add_event_handler(lambda event: self.on_key_up(event), "key_up")
-        self.renderer.add_event_handler(lambda event: self.on_before_render(event), "before_render")
-
-        self.canvas.request_draw(lambda: self.animate())
 
         self.playing = False
         self.retain_row(0)
@@ -133,67 +113,26 @@ class RenderBuddy:
         self.row_group.add(traj_line)
         self.scene.add(self.row_group)
 
-    def animate(self):
+    def on_animate(self, dt: float):
+        super().on_animate(dt)
         if self.playing:
             row = self.row + 1
             if row >= self.X.shape[0]:
                 row = 0
             self.retain_row(row)
 
-        self.renderer.render(self.scene, self.camera)
-        self.canvas.request_draw()
-
     def on_key_down(self, event):
-        if event.key == "Escape":
-            self.renderer.target.close()
-        elif event.key == " ":
+        super().on_key_down(event)
+        if event.key == " ":
             self.playing = not self.playing
-        elif event.key == "a":
-            self.left_stick[0] -= 1
-        elif event.key == "d":
-            self.left_stick[0] += 1
-        elif event.key == "w":
-            self.left_stick[1] += 1
-        elif event.key == "s":
-            self.left_stick[1] -= 1
-        elif event.key == "ArrowLeft":
-            self.right_stick[0] -= 1
-        elif event.key == "ArrowRight":
-            self.right_stick[0] += 1
-        elif event.key == "ArrowUp":
-            self.right_stick[1] += 1
-        elif event.key == "ArrowDown":
-            self.right_stick[1] -= 1
 
-    def on_key_up(self, event):
-        if event.key == "a":
-            self.left_stick[0] += 1
-        elif event.key == "d":
-            self.left_stick[0] -= 1
-        if event.key == "w":
-            self.left_stick[1] -= 1
-        elif event.key == "s":
-            self.left_stick[1] += 1
-        elif event.key == "ArrowLeft":
-            self.right_stick[0] += 1
-        elif event.key == "ArrowRight":
-            self.right_stick[0] -= 1
-        elif event.key == "ArrowUp":
-            self.right_stick[1] -= 1
-        elif event.key == "ArrowDown":
-            self.right_stick[1] += 1
+    def on_dpad_left(self):
+        super().on_dpad_left()
+        print("DPAD LEFT!")
 
-    def on_before_render(self, event):
-        now = perf_counter()
-        dt = now - self.last_tick_time
-        self.last_tick_time = now
-
-        roll_amount = 0
-        up_amount = 0
-
-        self.flycam.process(dt, self.left_stick, self.right_stick, roll_amount, up_amount)
-        self.camera.set_state({"position": self.flycam.pos, "rotation": self.flycam.rot})
-
+    def on_dpad_right(self):
+        super().on_dpad_right()
+        print("DPAD RIGHT!")
 
 def build_column_indices(start: int, stride: int, repeat: int = 1) -> Tuple[int, list[int]]:
     indices = [i * stride + start for i in range(repeat)]
@@ -248,5 +187,5 @@ if __name__ == "__main__":
     # un-normalize input for visualiztion
     X = X * (X_std / X_w) + X_mean
 
-    renderBuddy = RenderBuddy(skeleton, input_view, X)
+    renderBuddy = VisInputRenderBuddy(skeleton, input_view, X)
     run()

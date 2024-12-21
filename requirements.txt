@@ -7,4 +7,5 @@ glfw
 gltflib
 tqdm
 pygfx
+pygame
 doit
