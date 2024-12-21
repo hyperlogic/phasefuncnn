@@ -3,11 +3,13 @@
 # and outputs the input (X) output (Y) and phase (P) appropriate pytorch tensors ready for training.
 #
 
-import mocap
+import math_util as mu
+from skeleton import Skeleton
 import numpy as np
 import os
 import sys
 import torch
+import pickle
 from tqdm import trange, tqdm
 
 
@@ -15,6 +17,11 @@ OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4  # (px, pz, vx, vz)
+
+
+def unpickle_obj(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 
 def build_tensors(skeleton, root, jointva, traj, rootvel, contacts):
@@ -70,7 +77,7 @@ if __name__ == "__main__":
 
     for i in range(len(sys.argv) - 1):
         outbasepath = os.path.join(OUTPUT_DIR, sys.argv[i + 1])
-        skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
+        skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
         root = np.load(outbasepath + "_root.npy")
         jointpva = np.load(outbasepath + "_jointpva.npy")
         traj = np.load(outbasepath + "_traj.npy")

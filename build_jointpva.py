@@ -6,14 +6,21 @@
 #   Indices [6:9] are the joint angles in R^3 form (can use mocap.expmap to convert into a quaternion)
 
 import math
-import mocap
+import math_util as mu
 import numpy as np
+from skeleton import Skeleton
 import os
 import sys
+import pickle
 from tqdm import trange, tqdm
 
 OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
+
+
+def unpickle_obj(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 
 def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
@@ -25,7 +32,7 @@ def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
         jointpva_array[frame, i, 0:3] = local_xform[0:3, 3]
 
         # angle (rotation in expmap format)
-        jointpva_array[frame, i, 6:9] = mocap.logmap(mocap.quat_from_mat(local_xform))
+        jointpva_array[frame, i, 6:9] = mu.logmap(mu.quat_from_mat(local_xform))
 
 
 def build_jointv_at_frame(skeleton, frame, jointpva_array):
@@ -62,7 +69,7 @@ if __name__ == "__main__":
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
     # unpickle skeleton, xforms
-    skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
+    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
     xforms = np.load(outbasepath + "_xforms.npy")
     root = np.load(outbasepath + "_root.npy")
 

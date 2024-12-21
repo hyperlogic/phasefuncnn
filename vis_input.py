@@ -9,11 +9,17 @@ import pygfx as gfx
 import torch
 from wgpu.gui.auto import WgpuCanvas, run
 
-import mocap
+import math_util as mu
+from skeleton import Skeleton
 
 OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
+
+
+def unpickle_obj(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 
 class FlyCam:
@@ -41,7 +47,7 @@ class FlyCam:
         K = STIFF / self.speed
 
         # left_stick and up_amount control position
-        stick = mocap.util.quat_rotate(self.rot, np.array([left_stick[0], up_amount, -left_stick[1]]))
+        stick = mu.quat_rotate(self.rot, np.array([left_stick[0], up_amount, -left_stick[1]]))
         s_over_k = (stick * STIFF) / K
         s_over_k_sq = (stick * STIFF) / (K * K)
         e_neg_kt = np.exp(-K * dt)
@@ -50,11 +56,11 @@ class FlyCam:
         self.vel = v
 
         # right_stick and roll_amount control rotation
-        right = mocap.util.quat_rotate(self.rot, np.array([1, 0, 0]))
-        forward = mocap.util.quat_rotate(self.rot, np.array([0, 0, -1]))
-        yaw = mocap.util.quat_from_angle_axis(self.rot_speed * dt * -right_stick[0], self.world_up)
-        pitch = mocap.util.quat_from_angle_axis(self.rot_speed * dt * right_stick[1], right)
-        rot = mocap.util.quat_mul(mocap.util.quat_mul(yaw, pitch), self.rot)
+        right = mu.quat_rotate(self.rot, np.array([1, 0, 0]))
+        forward = mu.quat_rotate(self.rot, np.array([0, 0, -1]))
+        yaw = mu.quat_from_angle_axis(self.rot_speed * dt * -right_stick[0], self.world_up)
+        pitch = mu.quat_from_angle_axis(self.rot_speed * dt * right_stick[1], right)
+        rot = mu.quat_mul(mu.quat_mul(yaw, pitch), self.rot)
 
         # TODO apply roll
         # TODO compute cam_mat, such that world_up remains
@@ -81,7 +87,7 @@ def ref(row: torch.Tensor, input_view: InputView, key: str, index: str) -> torch
 
 
 class RenderBuddy:
-    skeleton: mocap.Skeleton
+    skeleton: Skeleton
     input_view: InputView
     X: torch.Tensor
     scene: gfx.Group
@@ -96,7 +102,7 @@ class RenderBuddy:
     left_stick: np.ndarray
     right_stick: np.ndarray
 
-    def __init__(self, skeleton: mocap.Skeleton, input_view: InputView, X: torch.Tensor):
+    def __init__(self, skeleton: Skeleton, input_view: InputView, X: torch.Tensor):
         self.last_tick_time = perf_counter()
         self.left_stick = np.array([0, 0])
         self.right_stick = np.array([0, 0])
@@ -125,7 +131,7 @@ class RenderBuddy:
 
         self.renderer.add_event_handler(lambda event: self.on_key_down(event), "key_down")
         self.renderer.add_event_handler(lambda event: self.on_key_up(event), "key_up")
-        self.renderer.add_event_handler(lambda event: self.before_render(event), "before_render")
+        self.renderer.add_event_handler(lambda event: self.on_before_render(event), "before_render")
 
         self.canvas.request_draw(lambda: self.animate())
 
@@ -222,7 +228,7 @@ class RenderBuddy:
         elif event.key == "ArrowDown":
             self.right_stick[1] += 1
 
-    def before_render(self, event):
+    def on_before_render(self, event):
         now = perf_counter()
         dt = now - self.last_tick_time
         self.last_tick_time = now
@@ -240,7 +246,7 @@ def build_column_indices(start: int, stride: int, repeat: int = 1) -> Tuple[int,
     return offset, indices
 
 
-def build_input_view(skeleton: mocap.Skeleton) -> InputView:
+def build_input_view(skeleton: Skeleton) -> InputView:
     num_joints = skeleton.num_joints
 
     input_view = {}
@@ -271,7 +277,7 @@ if __name__ == "__main__":
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
     # unpickle/load data
-    skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
+    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
     input_view = build_input_view(skeleton)
 
     print(f"skeleton.num_joints = {skeleton.num_joints}")

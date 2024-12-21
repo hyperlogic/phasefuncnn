@@ -1,20 +1,28 @@
 #
 # Build world space matrices for each joint at the given SAMPLE_RATE
 # Also, build the root motion matrices for the character.
-# And output the skeleton for the character (mocap.Skeleton)
+# And output the skeleton for the character (Skeleton)
 #
 
 from bvh import Bvh
 import math
-import mocap
+from skeleton import Skeleton
+import math_util as mu
+import bvh_util
 import numpy as np
 import os
+import pickle
 import sys
 from tqdm import trange, tqdm
 
 
 OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
+
+
+def pickle_obj(filename, obj):
+    with open(filename, "wb") as f:
+        pickle.dump(obj, f)
 
 
 def build_root_at_frame(skeleton, xforms, root, frame):
@@ -53,7 +61,7 @@ def build_root_at_frame(skeleton, xforms, root, frame):
     root_theta = -math.atan2(facing[2], facing[0])
 
     # build matrix
-    mocap.build_mat_roty(root[frame], root_theta)
+    mu.build_mat_roty(root[frame], root_theta)
     root[frame, 0:3, 3] = root_pos
 
     return root
@@ -91,13 +99,13 @@ if __name__ == "__main__":
     with open(mocap_filename) as f:
         bvh = Bvh(f.read())
 
-    skeleton = mocap.Skeleton(bvh)
+    skeleton = Skeleton(bvh)
     print(skeleton.joint_names)
 
-    xforms = mocap.build_xforms_from_bvh(bvh, skeleton, SAMPLE_RATE)
+    xforms = bvh_util.build_xforms_from_bvh(bvh, skeleton, SAMPLE_RATE)
 
     if mirror:
-        xforms = mocap.mirror_xforms(skeleton, xforms)
+        xforms = bvh_util.mirror_xforms(skeleton, xforms)
 
     root = build_root_motion(skeleton, xforms)
 
@@ -105,6 +113,6 @@ if __name__ == "__main__":
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # pickle skeleton, xforms
-    mocap.pickle_obj(outbasepath + "_skeleton.pkl", skeleton)
+    pickle_obj(outbasepath + "_skeleton.pkl", skeleton)
     np.save(outbasepath + "_xforms.npy", xforms)
     np.save(outbasepath + "_root.npy", root)

@@ -2,8 +2,8 @@ import bvh
 import copy
 import math
 import numpy as np
-from .skeleton import Skeleton
-from .util import build_mat_from_euler, mat_mirror
+import skeleton
+import math_util as mu
 from tqdm import trange, tqdm
 
 
@@ -27,7 +27,7 @@ def build_xforms_at_frame(xforms, bvh, skeleton, bvh_frame, frame):
             roty = bvh.frame_joint_channel(bvh_frame, joint_name, "Yrotation") * pi_180
             rotz = bvh.frame_joint_channel(bvh_frame, joint_name, "Zrotation") * pi_180
 
-        build_mat_from_euler(m, rotx, roty, rotz)
+        mu.build_mat_from_euler(m, rotx, roty, rotz)
         m[0:3, 3] = [posx, posy, posz]
 
         parent_index = skeleton.get_parent_index(joint_name)

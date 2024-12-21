@@ -6,8 +6,6 @@
 #
 
 import cmath
-import math
-import mocap
 import numpy as np
 import os
 import sys

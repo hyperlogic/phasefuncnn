@@ -3,10 +3,17 @@
 #
 
 import math
-import mocap
+import math_util as mu
+from skeleton import Skeleton
 import numpy as np
 import os
+import pickle
 import sys
+
+
+def unpickle_obj(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 
 OUTPUT_DIR = "output"
@@ -106,7 +113,7 @@ if __name__ == "__main__":
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
     # unpickle skeleton and xforms
-    skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
+    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
     xforms = np.load(outbasepath + "_xforms.npy")
 
     contacts = build_contacts(skeleton, xforms)

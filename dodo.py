@@ -25,7 +25,7 @@ mocap_paths = [
     "../PFNN/data/animations/LocomotionFlat12_000.bvh",
 ]
 
-#mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
+mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
 
 mocap_names = [os.path.splitext(os.path.basename(n))[0] for n in mocap_paths]
 

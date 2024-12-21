@@ -1,4 +1,5 @@
-import mocap
+import math_util as mu
+from skeleton import Skeleton
 import numpy as np
 import os
 import pickle
@@ -7,13 +8,19 @@ from tqdm import trange, tqdm
 import sys
 from wgpu.gui.auto import WgpuCanvas, run
 
+
 OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 
 
+def unpickle_obj(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
+
+
 def orient_towards(dir):
-    return mocap.quat_from_vectors(np.array([1, 0, 0]), dir)
+    return mu.quat_from_vectors(np.array([1, 0, 0]), dir)
 
 
 def orient_line_from_pv(line, pos, vel):
@@ -59,7 +66,7 @@ class RenderBuddy:
         # use a group to position all elements that are in root-relative space
         self.root_group = gfx.Group()
         self.root_group.local.position = self.root[0, 0:3, 3]
-        self.root_group.local.rotation = mocap.quat_from_mat(self.root[0])
+        self.root_group.local.rotation = mu.quat_from_mat(self.root[0])
         self.scene.add(self.root_group)
 
         if self.draw_root:
@@ -81,7 +88,7 @@ class RenderBuddy:
                     gfx.MeshPhongMaterial(color=joint_colors[joint_name]),
                 )
                 mesh.local.position = self.jointpva[0][i][0:3]
-                mesh.local.rotation = mocap.expmap(self.jointpva[0][i][6:9])
+                mesh.local.rotation = mu.expmap(self.jointpva[0][i][6:9])
                 self.joint_mesh.append(mesh)
                 self.root_group.add(mesh)
 
@@ -156,14 +163,14 @@ class RenderBuddy:
 
         # update root_group
         root_pos = self.root[self.curr_frame, 0:3, 3]
-        root_rot = mocap.quat_from_mat(self.root[self.curr_frame])
+        root_rot = mu.quat_from_mat(self.root[self.curr_frame])
         self.root_group.local.position = root_pos
         self.root_group.local.rotation = root_rot
 
         if self.draw_joints:
             for i in range(self.skeleton.num_joints):
                 pos = self.jointpva[self.curr_frame][i][0:3]
-                rot = mocap.expmap(self.jointpva[self.curr_frame][i][6:9])
+                rot = mu.expmap(self.jointpva[self.curr_frame][i][6:9])
                 self.joint_mesh[i].local.position = pos
                 self.joint_mesh[i].local.rotation = rot
 
@@ -185,7 +192,7 @@ class RenderBuddy:
         if self.draw_jointvel:
             for i in range(self.skeleton.num_joints):
                 pos = self.jointpva[self.curr_frame][i][0:3]
-                rot = mocap.expmap(self.jointpva[self.curr_frame][i][6:9])
+                rot = mu.expmap(self.jointpva[self.curr_frame][i][6:9])
                 vel = self.jointpva[self.curr_frame][i][3:6]
                 orient_line_from_pv(self.joint_vels[i], pos, vel)
 
@@ -205,13 +212,13 @@ class RenderBuddy:
 
         # animate phase
         if self.draw_phase:
-            cam_xform = mocap.build_mat_from_quat(np.eye(4), np.array(self.camera.world.rotation))
+            cam_xform = mu.build_mat_from_quat(np.eye(4), np.array(self.camera.world.rotation))
             cam_xform[0:3, 3] = self.camera.world.position
             offset_pos = np.array([10, 7, -20, 1])
-            phase_xform = mocap.build_mat_rotz(np.eye(4), -self.phase[self.curr_frame])
+            phase_xform = mu.build_mat_rotz(np.eye(4), -self.phase[self.curr_frame])
 
             self.clock_group.world.position = (cam_xform @ offset_pos)[0:3]
-            self.clock_group.world.rotation = mocap.quat_from_mat(cam_xform @ phase_xform)
+            self.clock_group.world.rotation = mu.quat_from_mat(cam_xform @ phase_xform)
 
         self.renderer.render(self.scene, self.camera)
         self.canvas.request_draw()
@@ -232,7 +239,7 @@ if __name__ == "__main__":
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
     # unpickle/load data
-    skeleton = mocap.unpickle_obj(outbasepath + "_skeleton.pkl")
+    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
     xforms = np.load(outbasepath + "_xforms.npy")
     root = np.load(outbasepath + "_root.npy")
     jointpva = np.load(outbasepath + "_jointpva.npy")
