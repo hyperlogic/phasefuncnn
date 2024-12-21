@@ -19,7 +19,7 @@ TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4  # 4 for px, pz, dx, dz
 
 
-def build_traj_at_frame(root, frame, traj_array):
+def build_traj_at_frame(root: np.ndarray, frame: int, traj_array: np.ndarray):
     num_frames = len(root)
     half_window = TRAJ_WINDOW_SIZE / 2
     start = int(frame - half_window * TRAJ_STEP)
@@ -38,7 +38,7 @@ def build_traj_at_frame(root, frame, traj_array):
         i = i + 1
 
 
-def build_traj(root):
+def build_traj(root: np.ndarray) -> np.ndarray:
     num_frames = root.shape[0]
     traj_array = np.zeros((num_frames, TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE))
     for frame in range(num_frames):
@@ -46,10 +46,9 @@ def build_traj(root):
     return traj_array
 
 
-def build_rootvel(root):
+def build_rootvel(root: np.ndarray) -> np.ndarray:
     num_frames = root.shape[0]
     t = (1 / SAMPLE_RATE) * 2
-    inv_root = np.linalg.inv(root)
     rootvel = np.zeros((num_frames, 3))
     for frame in range(num_frames):
         if frame > 0 and frame < num_frames - 1:

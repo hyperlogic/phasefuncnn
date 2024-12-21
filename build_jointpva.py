@@ -5,25 +5,23 @@
 #   Indices [3:6] are velocity x, y, z
 #   Indices [6:9] are the joint angles in R^3 form (can use mocap.expmap to convert into a quaternion)
 
-import math
 import math_util as mu
 import numpy as np
 from skeleton import Skeleton
 import os
 import sys
 import pickle
-from tqdm import trange, tqdm
 
 OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
 
 
-def unpickle_obj(filename):
+def unpickle_obj(filename: str):
     with open(filename, "rb") as f:
         return pickle.load(f)
 
 
-def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
+def build_jointpa_at_frame(skeleton: Skeleton, xforms: np.ndarray, inv_root: np.ndarray, frame: int, jointpva_array: np.ndarray):
     num_joints = skeleton.num_joints
     for i in range(num_joints):
         local_xform = inv_root[frame] @ xforms[frame][i]
@@ -35,7 +33,7 @@ def build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array):
         jointpva_array[frame, i, 6:9] = mu.logmap(mu.quat_from_mat(local_xform))
 
 
-def build_jointv_at_frame(skeleton, frame, jointpva_array):
+def build_jointv_at_frame(skeleton: Skeleton, frame: int, jointpva_array: np.ndarray):
     num_joints = skeleton.num_joints
     num_frames = len(jointpva_array)
     t = (1 / SAMPLE_RATE) * 2
@@ -48,7 +46,7 @@ def build_jointv_at_frame(skeleton, frame, jointpva_array):
             jointpva_array[frame, i, 3:6] = [0, 0, 0]
 
 
-def build_jointpva(skeleton, xforms, root):
+def build_jointpva(skeleton: Skeleton, xforms: np.ndarray, root: np.ndarray) -> np.ndarray:
     num_joints = skeleton.num_joints
     num_frames = len(xforms)
     inv_root = np.linalg.inv(root)

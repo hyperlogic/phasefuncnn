@@ -50,13 +50,7 @@ class VisInputRenderBuddy(RenderBuddy):
     row: int
     camera: gfx.PerspectiveCamera
     canvas: WgpuCanvas
-
-    #renderer: gfx.renderers.WgpuRenderer
-    #flycam: flycam.FlyCam
     playing: bool
-    #last_tick_time: float
-    #left_stick: np.ndarray
-    #right_stick: np.ndarray
 
     def __init__(self, skeleton: Skeleton, input_view: InputView, X: torch.Tensor):
         super().__init__()

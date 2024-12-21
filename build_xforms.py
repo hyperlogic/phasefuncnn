@@ -4,28 +4,29 @@
 # And output the skeleton for the character (Skeleton)
 #
 
-from bvh import Bvh
 import math
-from skeleton import Skeleton
-import math_util as mu
-import bvh_util
-import numpy as np
 import os
 import pickle
 import sys
-from tqdm import trange, tqdm
+from typing import Any
 
+import numpy as np
+from bvh import Bvh
+
+import bvh_util
+import math_util as mu
+from skeleton import Skeleton
 
 OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
 
 
-def pickle_obj(filename, obj):
+def pickle_obj(filename: str, obj: Any):
     with open(filename, "wb") as f:
         pickle.dump(obj, f)
 
 
-def build_root_at_frame(skeleton, xforms, root, frame):
+def build_root_at_frame(skeleton: Skeleton, xforms: np.ndarray, root: np.ndarray, frame: int) -> np.ndarray:
     lhip_i = skeleton.get_joint_index("LeftUpLeg")
     rhip_i = skeleton.get_joint_index("RightUpLeg")
     lsho_i = skeleton.get_joint_index("LeftArm")
@@ -67,7 +68,7 @@ def build_root_at_frame(skeleton, xforms, root, frame):
     return root
 
 
-def build_root_motion(skeleton, xforms):
+def build_root_motion(skeleton: Skeleton, xforms: np.ndarray) -> np.ndarray:
     num_frames = xforms.shape[0]
 
     # create array of 4x4 identity matrices, shape = (num_frames, 4, 4)

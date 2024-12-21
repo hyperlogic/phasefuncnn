@@ -2,10 +2,11 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
-import flycam
 import pygame
 import pygfx as gfx
 from wgpu.gui.auto import WgpuCanvas, run
+
+import flycam
 
 DEADSPOT_THRESH = 0.15
 KEY_REPEAT_DELAY = 1 / 2
@@ -17,8 +18,7 @@ def deadspot(val: float) -> float:
         return val
     else:
         return 0
-#next_dpad_
-#dpad_left_
+
 
 class RenderBuddy:
     joystick: pygame.joystick.JoystickType | None

@@ -3,15 +3,15 @@
 # and outputs the input (X) output (Y) and phase (P) appropriate pytorch tensors ready for training.
 #
 
-import math_util as mu
-from skeleton import Skeleton
-import numpy as np
 import os
-import sys
-import torch
 import pickle
-from tqdm import trange, tqdm
+import sys
 
+import numpy as np
+import torch
+from typing import Tuple
+
+from skeleton import Skeleton
 
 OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
@@ -19,12 +19,19 @@ TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4  # (px, pz, vx, vz)
 
 
-def unpickle_obj(filename):
+def unpickle_obj(filename: str):
     with open(filename, "rb") as f:
         return pickle.load(f)
 
 
-def build_tensors(skeleton, root, jointva, traj, rootvel, contacts):
+def build_tensors(
+    skeleton: Skeleton,
+    root: torch.Tensor,
+    jointva: torch.Tensor,
+    traj: torch.Tensor,
+    rootvel: torch.Tensor,
+    contacts: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     num_joints = skeleton.num_joints
     num_rows = root.shape[0] - 2  # skip the first and last frame
     t = (1 / SAMPLE_RATE) * 2

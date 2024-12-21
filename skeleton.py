@@ -11,14 +11,14 @@ class Skeleton:
     joint_offset_map: dict[str, list[float]]
     num_joints: int
 
-    def __init__(self, bvh):
+    def __init__(self, bvh: bvh.Bvh):
         self.joint_names = bvh.get_joints_names()
         self.root_name = self.joint_names[0]
         self.joint_index_map = {self.joint_names[i]: i for i in range(len(self.joint_names))}
         self.has_pos_map = {j: "Xposition" in bvh.joint_channels(j) for j in self.joint_names}
         self.has_rot_map = {j: "Xrotation" in bvh.joint_channels(j) for j in self.joint_names}
         self.parent_map = {j: bvh.joint_parent_index(j) for j in self.joint_names}
-        self.joint_offset_map = {j: bvh.joint_offset(j) for j in self.joint_names}
+        self.joint_offset_map = {j: list(bvh.joint_offset(j)) for j in self.joint_names}
         self.num_joints = len(self.joint_names)
         self.build_mirror_map()
 

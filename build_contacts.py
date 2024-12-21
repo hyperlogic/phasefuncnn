@@ -3,7 +3,6 @@
 #
 
 import math
-import math_util as mu
 from skeleton import Skeleton
 import numpy as np
 import os
@@ -11,7 +10,7 @@ import pickle
 import sys
 
 
-def unpickle_obj(filename):
+def unpickle_obj(filename: str):
     with open(filename, "rb") as f:
         return pickle.load(f)
 
@@ -21,7 +20,7 @@ SAMPLE_RATE = 60
 VEL_THRESH = 15
 
 
-def build_contacts(skeleton, xforms):
+def build_contacts(skeleton: Skeleton, xforms: np.ndarray) -> np.ndarray:
     num_frames = xforms.shape[0]
     contacts = np.zeros((num_frames, 4))
     t = (1 / SAMPLE_RATE) * 2
@@ -47,7 +46,7 @@ def build_contacts(skeleton, xforms):
 
 
 # 0 = no feet down, 1 = right foot down, 2 = left foot down, 3 = both feet down
-def make_state(contact):
+def make_state(contact: np.ndarray) -> int:
     state = 0
     # right foot
     if contact[1] > 0.5 or contact[3] > 0.5:
@@ -66,7 +65,7 @@ state_phase = [
 ]
 
 
-def build_phase(contacts):
+def build_phase(contacts: np.ndarray) -> np.ndarray:
     num_frames = len(contacts)
 
     keyframes = []
