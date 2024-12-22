@@ -127,19 +127,24 @@ if __name__ == "__main__":
         phase = torch.from_numpy(phase)
 
         x, y = build_tensors(skeleton, root, jointpva, traj, rootvel, contacts)
+        p = phase[1:-1]
 
         print(f"    x.shape = {x.shape}")
         print(f"    y.shape = {y.shape}")
+        print(f"    p.shape = {p.shape}")
+
+        assert x.shape[0] == y.shape[0]
+        assert y.shape[0] == p.shape[0]
 
         if i == 0:
             X = x
             Y = y
-            P = phase
+            P = p
             num_joints = skeleton.num_joints
         else:
             X = torch.cat((X, x), dim=0)
             Y = torch.cat((Y, y), dim=0)
-            P = torch.cat((P, phase), dim=0)
+            P = torch.cat((P, p), dim=0)
 
     traj_size = TRAJ_WINDOW_SIZE * 4
     jointpv_size = num_joints * 6

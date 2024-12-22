@@ -42,8 +42,8 @@ def get_python_files_in_module(module_name):
             result.append(mod_name.replace(".", "/") + ".py")
     return result
 
-
-mocap_deps = get_python_files_in_module("mocap")
+# mocap module is no longer used
+mocap_deps = ["math_util.py", "bvh_util.py", "skeleton.py"] # get_python_files_in_module("mocap")
 
 
 def task_build_xforms():
