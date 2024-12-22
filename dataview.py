@@ -17,6 +17,7 @@ class InputView(TypedDict):
     traj_vel_i: ColumnView
     joint_pos_im1: ColumnView
     joint_vel_im1: ColumnView
+    num_cols: int
 
 
 class OutputView(TypedDict):
@@ -29,6 +30,7 @@ class OutputView(TypedDict):
     joint_angvel_i: ColumnView
     phase_vel_i: ColumnView
     contacts_i: ColumnView
+    num_cols: int
 
 
 def ref(row: torch.Tensor, output_view: OutputView, key: str, index: str) -> torch.Tensor:
@@ -58,6 +60,8 @@ def build_input_view(skeleton: Skeleton) -> InputView:
     input_view["joint_pos_im1"] = {"size": 3, "indices": indices}
     _, indices = build_column_indices(offset + 3, 6, num_joints)
     input_view["joint_vel_im1"] = {"size": 3, "indices": indices}
+
+    input_view["num_cols"] = next_offset
 
     for k, v in input_view.items():
         print(f"{k}: {v}")
@@ -96,6 +100,8 @@ def build_output_view(skeleton: Skeleton) -> OutputView:
     offset = next_offset
     next_offset, indices = build_column_indices(offset, 4, 1)
     output_view["contacts_i"] = {"size": 4, "indices": indices}
+
+    output_view["num_cols"] = next_offset
 
     for k, v in output_view.items():
         print(f"{k}: {v}")
