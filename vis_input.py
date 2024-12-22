@@ -10,6 +10,7 @@ import flycam
 import torch
 from wgpu.gui.auto import WgpuCanvas, run
 
+import dataview
 import math_util as mu
 from skeleton import Skeleton
 from renderbuddy import RenderBuddy
@@ -24,27 +25,9 @@ def unpickle_obj(filename):
         return pickle.load(f)
 
 
-class ColumnView(TypedDict):
-    size: int
-    indices: list[int]
-
-
-class InputView(TypedDict):
-    traj_pos_i: ColumnView
-    traj_vel_i: ColumnView
-    joint_pos_im1: ColumnView
-    joint_vel_im1: ColumnView
-
-
-def ref(row: torch.Tensor, input_view: InputView, key: str, index: str) -> torch.Tensor:
-    index = input_view[key]["indices"][index]
-    size = input_view[key]["size"]
-    return row[index : index + size]
-
-
 class VisInputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
-    input_view: InputView
+    input_view: dataview.InputView
     X: torch.Tensor
     row_group: gfx.Group
     row: int
@@ -52,7 +35,7 @@ class VisInputRenderBuddy(RenderBuddy):
     canvas: WgpuCanvas
     playing: bool
 
-    def __init__(self, skeleton: Skeleton, input_view: InputView, X: torch.Tensor):
+    def __init__(self, skeleton: Skeleton, input_view: dataview.InputView, X: torch.Tensor):
         super().__init__()
 
         self.skeleton = skeleton
@@ -80,8 +63,8 @@ class VisInputRenderBuddy(RenderBuddy):
             parent_index = skeleton.get_parent_index(child)
             if parent_index >= 0:
                 # line from p.offset
-                p0 = ref(X_row, self.input_view, "joint_pos_im1", parent_index).tolist()
-                p1 = ref(X_row, self.input_view, "joint_pos_im1", child_index).tolist()
+                p0 = dataview.ref(X_row, self.input_view, "joint_pos_im1", parent_index).tolist()
+                p1 = dataview.ref(X_row, self.input_view, "joint_pos_im1", child_index).tolist()
                 positions += [p0, p1]
                 colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
         joint_line = gfx.Line(
@@ -91,8 +74,8 @@ class VisInputRenderBuddy(RenderBuddy):
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
-            p0 = ref(X_row, self.input_view, "traj_pos_i", i)
-            p1 = ref(X_row, self.input_view, "traj_pos_i", i + 1)
+            p0 = dataview.ref(X_row, self.input_view, "traj_pos_i", i)
+            p1 = dataview.ref(X_row, self.input_view, "traj_pos_i", i + 1)
             positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
             if i % 2 == 0:
                 colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
@@ -128,33 +111,6 @@ class VisInputRenderBuddy(RenderBuddy):
         super().on_dpad_right()
         print("DPAD RIGHT!")
 
-def build_column_indices(start: int, stride: int, repeat: int = 1) -> Tuple[int, list[int]]:
-    indices = [i * stride + start for i in range(repeat)]
-    offset = repeat * stride + start
-    return offset, indices
-
-
-def build_input_view(skeleton: Skeleton) -> InputView:
-    num_joints = skeleton.num_joints
-
-    input_view = {}
-    offset = 0
-    next_offset, indices = build_column_indices(offset, 4, TRAJ_WINDOW_SIZE)
-    input_view["traj_pos_i"] = {"size": 2, "indices": indices}
-    _, indices = build_column_indices(offset + 2, 4, TRAJ_WINDOW_SIZE)
-    input_view["traj_vel_i"] = {"size": 2, "indices": indices}
-
-    offset = next_offset
-    next_offset, indices = build_column_indices(offset, 6, num_joints)
-    input_view["joint_pos_im1"] = {"size": 3, "indices": indices}
-    _, indices = build_column_indices(offset + 3, 6, num_joints)
-    input_view["joint_vel_im1"] = {"size": 3, "indices": indices}
-
-    for k, v in input_view.items():
-        print(f"{k}: {v}")
-
-    return InputView(**input_view)
-
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -166,7 +122,7 @@ if __name__ == "__main__":
 
     # unpickle/load data
     skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
-    input_view = build_input_view(skeleton)
+    input_view = dataview.build_input_view(skeleton)
 
     print(f"skeleton.num_joints = {skeleton.num_joints}")
     X = torch.load(os.path.join(OUTPUT_DIR, "X.pth"), weights_only=True)

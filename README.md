@@ -80,27 +80,21 @@ shape = (num_rows, 1)
 
 TODO:
 -------------------------
-VISUALIZE
------------
-* render output tensors, i.e. the result after inference
 
 BUILD
 -----------
-* DONE: normalization of inputs -
-  In build process, generate ALL data as a tensor.
-  * normalize and importance scale input
-  * normalize output
-  * resulting in X, Y and P tensors
-* DONE: make sure concatination of all mocap files works.
+dump "views" for input and output tensors.
 
-TRAIN
+VISUALIZE
+-----------
+* do inference with joystick controls
+
+TRAINING
 ----------
-* catmull rom
-  * unravel/ravel (for weights)
-  * control point shift...
 * correct loss function
-* phase function of cubic catmull rom
 * dropout layers
+
+
 
 
 
