@@ -86,14 +86,24 @@ class PhaseLinear(nn.Module):
         return w, b
 
     def forward(self, input: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
+
+        single_sample = (input.ndim == 1)
+        if single_sample:
+            input = input.unsqueeze(0)  # Add batch dimension!
+            phase = phase.unsqueeze(0)
+
         w, b = self.phase_function(phase)
 
         # F.linear(input, w, b)
         result = w @ input.unsqueeze(-1) + b.unsqueeze(-1)
-        result = result.squeeze()
+        result = result.squeeze(-1)
 
         assert result.shape[0] == input.shape[0], "batch size must be the same"
         assert result.shape[1] == self.out_features, "result must have same size as out_features"
+
+        # If input was non-batched, remove the batch dimension from the output
+        if single_sample:
+            result = result.squeeze(0)  # Remove batch dimension!
 
         return result
 

@@ -63,8 +63,8 @@ class VisInputRenderBuddy(RenderBuddy):
             parent_index = skeleton.get_parent_index(child)
             if parent_index >= 0:
                 # line from p.offset
-                p0 = dataview.ref(X_row, self.input_view, "joint_pos_im1", parent_index).tolist()
-                p1 = dataview.ref(X_row, self.input_view, "joint_pos_im1", child_index).tolist()
+                p0 = dataview.get(X_row, self.input_view, "joint_pos_im1", parent_index).tolist()
+                p1 = dataview.get(X_row, self.input_view, "joint_pos_im1", child_index).tolist()
                 positions += [p0, p1]
                 colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
         joint_line = gfx.Line(
@@ -74,8 +74,8 @@ class VisInputRenderBuddy(RenderBuddy):
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
-            p0 = dataview.ref(X_row, self.input_view, "traj_pos_i", i)
-            p1 = dataview.ref(X_row, self.input_view, "traj_pos_i", i + 1)
+            p0 = dataview.get(X_row, self.input_view, "traj_pos_i", i)
+            p1 = dataview.get(X_row, self.input_view, "traj_pos_i", i + 1)
             positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
             if i % 2 == 0:
                 colors += [[1, 1, 1, 1], [1, 1, 1, 1]]

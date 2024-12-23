@@ -33,10 +33,17 @@ class OutputView(TypedDict):
     num_cols: int
 
 
-def ref(row: torch.Tensor, output_view: OutputView, key: str, index: str) -> torch.Tensor:
-    index = output_view[key]["indices"][index]
-    size = output_view[key]["size"]
+def get(row: torch.Tensor, view: dict[str, ColumnView], key: str, index: int) -> torch.Tensor:
+    index = view[key]["indices"][index]
+    size = view[key]["size"]
     return row[index : index + size]
+
+
+def set(row: torch.Tensor, view: dict[str, ColumnView], key: str, index: int, value: torch.Tensor) -> torch.Tensor:
+    index = view[key]["indices"][index]
+    size = view[key]["size"]
+    assert value.shape[0] == size
+    row[index : index + size] = value
 
 
 def build_column_indices(start: int, stride: int, repeat: int = 1) -> Tuple[int, list[int]]:
@@ -62,9 +69,6 @@ def build_input_view(skeleton: Skeleton) -> InputView:
     input_view["joint_vel_im1"] = {"size": 3, "indices": indices}
 
     input_view["num_cols"] = next_offset
-
-    for k, v in input_view.items():
-        print(f"{k}: {v}")
 
     return InputView(**input_view)
 
@@ -102,8 +106,5 @@ def build_output_view(skeleton: Skeleton) -> OutputView:
     output_view["contacts_i"] = {"size": 4, "indices": indices}
 
     output_view["num_cols"] = next_offset
-
-    for k, v in output_view.items():
-        print(f"{k}: {v}")
 
     return OutputView(**output_view)
