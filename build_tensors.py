@@ -3,6 +3,7 @@
 # and outputs the input (X) output (Y) and phase (P) appropriate pytorch tensors ready for training.
 #
 
+import cmath
 import os
 import pickle
 import sys
@@ -68,7 +69,20 @@ def build_tensors(
         col += jointpva_size
         y[row, col : col + rootvel_size] = rootvel[frame]
         col += rootvel_size
-        y[row, col] = (phase[frame + 1] - phase[frame - 1]) / t
+
+        # compute phase_vel
+
+        # Represent angles as unit complex numbers
+        z1 = cmath.rect(1, phase[frame - 1])
+        z2 = cmath.rect(1, phase[frame + 1])
+        diff = cmath.phase(z2 / z1)
+        # ensure that phase_vel is always positive
+        if diff < 0:
+            diff = 2 * np.pi + diff
+        phase_vel = diff / t
+        y[row, col] = phase_vel
+        assert phase_vel >= 0, f"p1 = {phase[frame - 1]}, p2 = {phase[frame + 1]}, diff = {diff}, diff2 = {phase[frame + 1] - phase[frame - 1]}"
+
         col += 1
         y[row, col : col + contacts_size] = contacts[frame]
         col += contacts_size
