@@ -59,3 +59,53 @@ class InputLens:
 
     def normalize(self, data: torch.Tensor, mean: torch.Tensor, std: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
         return (data - mean) * (w / std)
+
+
+class OutputLens:
+    traj_pos_ip1: ColumnLens
+    traj_dir_ip1: ColumnLens
+    joint_pos_i: ColumnLens
+    joint_vel_i: ColumnLens
+    joint_rot_i: ColumnLens
+    root_vel_i: ColumnLens
+    root_angvel_i: ColumnLens
+    phase_vel_i: ColumnLens
+    contacts_i: ColumnLens
+    num_cols: int
+
+    def __init__(self, traj_count: int, joint_count: int):
+        offset = 0
+        next_offset, indices = build_column_indices(offset, 4, traj_count)
+        self.traj_pos_ip1 = ColumnLens(2, indices)
+        _, indices = build_column_indices(offset + 2, 4, traj_count)
+        self.traj_dir_ip1 = ColumnLens(2, indices)
+
+        offset = next_offset
+        next_offset, indices = build_column_indices(offset, 9, joint_count)
+        self.joint_pos_i = ColumnLens(3, indices)
+        _, indices = build_column_indices(offset + 3, 9, joint_count)
+        self.joint_vel_i = ColumnLens(3, indices)
+        _, indices = build_column_indices(offset + 6, 9, joint_count)
+        self.joint_rot_i = ColumnLens(3, indices)
+
+        offset = next_offset
+        next_offset, indices = build_column_indices(offset, 3, 1)
+        self.root_vel_i = ColumnLens(2, indices)
+        _, indices = build_column_indices(offset + 2, 3, 1)
+        self.root_angvel_i = ColumnLens(1, indices)
+
+        offset = next_offset
+        next_offset, indices = build_column_indices(offset, 1, 1)
+        self.phase_vel_i = ColumnLens(1, indices)
+
+        offset = next_offset
+        next_offset, indices = build_column_indices(offset, 4, 1)
+        self.contacts_i = ColumnLens(4, indices)
+
+        self.num_cols = next_offset
+
+    def unnormalize(self, data: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
+        return data * std + mean
+
+    def normalize(self, data: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
+        return (data - mean) / std

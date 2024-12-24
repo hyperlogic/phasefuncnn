@@ -9,7 +9,7 @@ import flycam
 import torch
 from wgpu.gui.auto import WgpuCanvas, run
 
-import dataview
+import datalens
 import math_util as mu
 from skeleton import Skeleton
 from renderbuddy import RenderBuddy
@@ -26,7 +26,7 @@ def unpickle_obj(filename):
 
 class VisOutputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
-    output_view: dataview.OutputView
+    y_lens: datalens.OutputLens
     Y: torch.Tensor
     row_group: gfx.Group
     row: int
@@ -34,7 +34,7 @@ class VisOutputRenderBuddy(RenderBuddy):
     canvas: WgpuCanvas
     playing: bool
 
-    def __init__(self, skeleton: Skeleton, output_view: dataview.OutputView, Y: torch.Tensor):
+    def __init__(self, skeleton: Skeleton, output_view: datalens.OutputLens, Y: torch.Tensor):
         super().__init__()
 
         self.skeleton = skeleton
@@ -63,8 +63,8 @@ class VisOutputRenderBuddy(RenderBuddy):
             parent_index = skeleton.get_parent_index(child)
             if parent_index >= 0:
                 # line from p.offset
-                p0 = dataview.get(Y_row, self.output_view, "joint_pos_i", parent_index).tolist()
-                p1 = dataview.get(Y_row, self.output_view, "joint_pos_i", child_index).tolist()
+                p0 = y_lens.joint_pos_i.get(Y_row, parent_index).tolist()
+                p1 = y_lens.joint_pos_i.get(Y_row, child_index).tolist()
                 positions += [p0, p1]
                 colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
         joint_line = gfx.Line(
@@ -74,8 +74,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
-            p0 = dataview.get(Y_row, self.output_view, "traj_pos_ip1", i)
-            p1 = dataview.get(Y_row, self.output_view, "traj_pos_ip1", i + 1)
+            p0 = y_lens.traj_pos_ip1.get(Y_row, i)
+            p1 = y_lens.traj_pos_ip1.get(Y_row, i + 1)
             positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
             if i % 2 == 0:
                 colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     # unpickle/load data
     skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
-    output_view = dataview.build_output_view(skeleton)
+    y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
 
     print(f"skeleton.num_joints = {skeleton.num_joints}")
     Y = torch.load(os.path.join(OUTPUT_DIR, "Y.pth"), weights_only=True)
@@ -130,11 +130,10 @@ if __name__ == "__main__":
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
     print(f"Y.shape = {Y.shape}")
 
-    num_cols = output_view["contacts_i"]["indices"][-1] + output_view["contacts_i"]["size"]
-    assert num_cols == Y.shape[1]
+    assert y_lens.num_cols == Y.shape[1]
 
     # un-normalize input for visualiztion
-    Y = Y * Y_std + Y_mean
+    Y = y_lens.unnormalize(Y, Y_mean, Y_std)
 
-    render_buddy = VisOutputRenderBuddy(skeleton, output_view, Y)
+    render_buddy = VisOutputRenderBuddy(skeleton, y_lens, Y)
     run()
