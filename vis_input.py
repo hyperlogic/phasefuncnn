@@ -10,7 +10,7 @@ import flycam
 import torch
 from wgpu.gui.auto import WgpuCanvas, run
 
-import dataview
+import datalens
 import math_util as mu
 from skeleton import Skeleton
 from renderbuddy import RenderBuddy
@@ -27,7 +27,7 @@ def unpickle_obj(filename):
 
 class VisInputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
-    input_view: dataview.InputView
+    x_lens: datalens.InputLens
     X: torch.Tensor
     row_group: gfx.Group
     row: int
@@ -35,11 +35,11 @@ class VisInputRenderBuddy(RenderBuddy):
     canvas: WgpuCanvas
     playing: bool
 
-    def __init__(self, skeleton: Skeleton, input_view: dataview.InputView, X: torch.Tensor):
+    def __init__(self, skeleton: Skeleton, input_view: datalens.InputLens, X: torch.Tensor):
         super().__init__()
 
         self.skeleton = skeleton
-        self.input_view = input_view
+        self.x_lens = x_lens
         self.X = X
 
         self.row_group = gfx.Group()
@@ -63,8 +63,8 @@ class VisInputRenderBuddy(RenderBuddy):
             parent_index = skeleton.get_parent_index(child)
             if parent_index >= 0:
                 # line from p.offset
-                p0 = dataview.get(X_row, self.input_view, "joint_pos_im1", parent_index).tolist()
-                p1 = dataview.get(X_row, self.input_view, "joint_pos_im1", child_index).tolist()
+                p0 = x_lens.joint_pos_im1.get(X_row, parent_index).tolist()
+                p1 = x_lens.joint_pos_im1.get(X_row, child_index).tolist()
                 positions += [p0, p1]
                 colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
         joint_line = gfx.Line(
@@ -74,8 +74,8 @@ class VisInputRenderBuddy(RenderBuddy):
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
-            p0 = dataview.get(X_row, self.input_view, "traj_pos_i", i)
-            p1 = dataview.get(X_row, self.input_view, "traj_pos_i", i + 1)
+            p0 = x_lens.traj_pos_i.get(X_row, i)
+            p1 = x_lens.traj_pos_i.get(X_row, i + 1)
             positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
             if i % 2 == 0:
                 colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
@@ -122,20 +122,22 @@ if __name__ == "__main__":
 
     # unpickle/load data
     skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
-    input_view = dataview.build_input_view(skeleton)
+
+    x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
 
     print(f"skeleton.num_joints = {skeleton.num_joints}")
     X = torch.load(os.path.join(OUTPUT_DIR, "X.pth"), weights_only=True)
+    print(f"X.shape = {X.shape}")
+
     X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True)
     X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
     X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
-    print(f"X.shape = {X.shape}")
 
-    num_cols = input_view["joint_vel_im1"]["indices"][-1] + input_view["joint_vel_im1"]["size"]
-    assert num_cols == X.shape[1]
+
+    assert x_lens.num_cols == X.shape[1]
 
     # un-normalize input for visualization
-    X = X * (X_std / X_w) + X_mean
+    X = x_lens.unnormalize(X, X_mean, X_std, X_w)
 
-    render_buddy = VisInputRenderBuddy(skeleton, input_view, X)
+    render_buddy = VisInputRenderBuddy(skeleton, x_lens, X)
     run()
