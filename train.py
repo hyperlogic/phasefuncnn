@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 from pfnn import PFNN
 
@@ -37,7 +38,7 @@ class MocapDataset(torch.utils.data.Dataset):
 
 
 MAX_EPOCHS = 10000
-BATCH_SIZE = 1024
+BATCH_SIZE = 2048
 VAL_DATASET_FACTOR = 0.1
 
 if __name__ == "__main__":
@@ -95,6 +96,8 @@ if __name__ == "__main__":
     CHECKPOINT_CADENCE = 100
     train_start_time = time.time()
 
+    writer = SummaryWriter()
+
     for epoch in range(MAX_EPOCHS):
         # train the model
         train_loss = 0.0
@@ -106,6 +109,8 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             output = model(x, p)
             loss = criterion(output, y)
+
+            writer.add_scalar("Loss/train", loss, epoch)
 
             train_loss += loss.item()
             train_count += 1
@@ -126,6 +131,7 @@ if __name__ == "__main__":
 
                 output = model(x, p)
                 loss = criterion(output, y)
+                writer.add_scalar("Loss/validation", loss, epoch)
                 val_loss += loss.item()
                 val_count += 1
 
@@ -147,8 +153,11 @@ if __name__ == "__main__":
             print(f"   saving checkpoint_{epoch}.pth")
             torch.save(model.state_dict(), OUTPUT_DIR / f"checkpoint_{epoch}.pth")
 
+    writer.flush()
+    writer.close()
     train_end_time = time.time()
     print(f"Training took {train_end_time - train_start_time} sec")
 
     # output model
     torch.save(model.state_dict(), OUTPUT_DIR / "final_checkpoint.pth")
+

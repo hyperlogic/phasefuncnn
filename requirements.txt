@@ -9,3 +9,4 @@ tqdm
 pygfx
 pygame
 doit
+tensorboard
