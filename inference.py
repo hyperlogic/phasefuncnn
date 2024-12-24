@@ -136,13 +136,11 @@ class VisOutputRenderBuddy(RenderBuddy):
 
     def on_animate(self, dt: float):
         super().on_animate(dt)
-        """
         if self.playing:
             self.t += dt
             if self.t > (1 / SAMPLE_RATE):
                 self.tick_model()
                 self.retain_output()
-        """
 
     def tick_model(self):
         # self.x = torch.zeros(self.x.shape)
@@ -153,8 +151,8 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         t = torch.linspace(0, 1, 2 * (TRAJ_WINDOW_SIZE // 2) + 1).unsqueeze(1)
 
-        start = nograd_tensor([-10.0, 0.0])
-        end = nograd_tensor([10.0, 0.0])
+        start = nograd_tensor([-50.0, 0.0])
+        end = nograd_tensor([50.0, 0.0])
         traj_positions = (1 - t) * start + t * end
 
         for i in range(TRAJ_WINDOW_SIZE):
@@ -166,37 +164,17 @@ class VisOutputRenderBuddy(RenderBuddy):
             x_lens.traj_pos_i.set(self.x, i, traj_pos)
             x_lens.traj_dir_i.set(self.x, i, traj_dir)
 
-        """
-        # global joint_pos
-        g_joint_positions = torch.zeros((self.skeleton.num_joints, 3))
         for i in range(self.skeleton.num_joints):
-            joint_name = self.skeleton.get_joint_name(i)
-            parent_i = self.skeleton.get_parent_index(joint_name)
-            joint_pos = torch.tensor(self.skeleton.get_joint_offset(joint_name), dtype=torch.float32, requires_grad=False)
-            if parent_i >= 0:
-                g_joint_positions[i] = g_joint_positions[parent_i] + joint_pos
-            else:
-                g_joint_positions[i] = joint_pos
-        """
-
-        """
-        for i in range(self.skeleton.num_joints):
+            # copy joints over from output to next input.
             joint_pos = y_lens.joint_pos_i.get(self.y, i)
-            # joint_vel = y_lens.joint_vel_i.get(self.y, i)
-
-            joint_name = self.skeleton.get_joint_name(i)
-            # joint_pos = g_joint_positions[i]
-            joint_vel = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32, requires_grad=False)
-
+            joint_vel = y_lens.joint_vel_i.get(self.y, i)
             x_lens.joint_pos_im1.set(self.x, i, joint_pos)
             x_lens.joint_vel_im1.set(self.x, i, joint_vel)
 
-            print(f"    joint_name[{i}] = {joint_name}")
-            print(f"    joint_pos_im1[{i}] = {x_lens.joint_pos_im1.get(self.x, i)}")
-            print(f"    joint_vel_im1[{i}] = {x_lens.joint_vel_im1.get(self.x, i)}")
-        """
-
         phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
+        MIN_PHASE_VEL = 0.5
+        MAX_PHASE_VEL = 100.0
+        phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
         self.p += phase_vel * (1 / SAMPLE_RATE)
         self.p = self.p % (2 * math.pi)
 
@@ -218,9 +196,7 @@ class VisOutputRenderBuddy(RenderBuddy):
     def on_key_down(self, event):
         super().on_key_down(event)
         if event.key == " ":
-            # self.playing = not self.playing
-            self.tick_model()
-            self.retain_output()
+            self.playing = not self.playing
 
     def on_dpad_left(self):
         super().on_dpad_left()
