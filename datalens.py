@@ -38,7 +38,7 @@ def build_column_indices(start: int, stride: int, repeat: int = 1) -> Tuple[int,
 
 class InputLens:
     traj_pos_i: ColumnLens
-    traj_vel_i: ColumnLens
+    traj_dir_i: ColumnLens
     joint_pos_im1: ColumnLens
     joint_vel_im1: ColumnLens
     num_cols: int
@@ -49,7 +49,7 @@ class InputLens:
         next_offset, indices = build_column_indices(offset, 4, traj_count)
         self.traj_pos_i = ColumnLens(2, indices)
         _, indices = build_column_indices(offset + 2, 4, traj_count)
-        self.traj_vel_i = ColumnLens(2, indices)
+        self.traj_dir_i = ColumnLens(2, indices)
 
         offset = next_offset
         next_offset, indices = build_column_indices(offset, 6, joint_count)
