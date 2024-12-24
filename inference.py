@@ -23,10 +23,13 @@ TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 SAMPLE_RATE = 60
 
-
 def unpickle_obj(filename):
     with open(filename, "rb") as f:
         return pickle.load(f)
+
+
+def nograd_tensor(array: list[float]):
+    return torch.tensor(array, dtype=torch.float32, requires_grad=False)
 
 
 class VisOutputRenderBuddy(RenderBuddy):
@@ -145,21 +148,23 @@ class VisOutputRenderBuddy(RenderBuddy):
         # self.x = torch.zeros(self.x.shape)
         self.x = x_lens.unnormalize(self.x, self.x_mean, self.x_std, self.x_w)
 
-        x_lens.print(self.x)
+        #print("x0 =")
+        #x_lens.print(self.x)
 
-        print("x = ")
+        t = torch.linspace(0, 1, 2 * (TRAJ_WINDOW_SIZE // 2) + 1).unsqueeze(1)
+
+        start = nograd_tensor([-10.0, 0.0])
+        end = nograd_tensor([10.0, 0.0])
+        traj_positions = (1 - t) * start + t * end
 
         for i in range(TRAJ_WINDOW_SIZE):
             # traj_pos = y_lens.traj_pos_ip1.get(self.y, i)
             # traj_dir = y_lens.traj_pos_ip1.get(self.y, i)
 
-            traj_pos = torch.tensor([0.0, 0.0], dtype=torch.float32, requires_grad=False)
-            traj_dir = torch.tensor([0.0, -1.0], dtype=torch.float32, requires_grad=False)
+            traj_pos = traj_positions[i]
+            traj_dir = torch.tensor([1.0, 0.0], dtype=torch.float32, requires_grad=False)
             x_lens.traj_pos_i.set(self.x, i, traj_pos)
-            # x_lens.traj_vel_i.set(self.x, i, traj_dir * (1 / SAMPLE_RATE))
-
-            print(f"    traj_pos_i[{i}] = {x_lens.traj_pos_i.get(self.x, i)}")
-            print(f"    traj_vel_i[{i}] = {x_lens.traj_vel_i.get(self.x, i)}")
+            x_lens.traj_dir_i.set(self.x, i, traj_dir)
 
         """
         # global joint_pos
@@ -191,13 +196,15 @@ class VisOutputRenderBuddy(RenderBuddy):
             print(f"    joint_vel_im1[{i}] = {x_lens.joint_vel_im1.get(self.x, i)}")
         """
 
-        """
         phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
         self.p += phase_vel * (1 / SAMPLE_RATE)
         self.p = self.p % (2 * math.pi)
-        """
 
-        print(f"phase = {self.p}")
+        print(f"phase = {self.p}, phase_vel = {phase_vel}")
+
+        #print("x1 =")
+        #x_lens.print(self.x)
+
 
         # normalize input
         self.x = x_lens.normalize(self.x, self.x_mean, self.x_std, self.x_w)
@@ -282,6 +289,6 @@ if __name__ == "__main__":
     print(f"loss = {loss}")
 
     render_buddy = VisOutputRenderBuddy(
-        skeleton, x_lens, y_lens, model, X[1000], P[1000], Y_mean, Y_std, X_mean, X_std, X_w
+        skeleton, x_lens, y_lens, model, X[2], P[2], Y_mean, Y_std, X_mean, X_std, X_w
     )
     run()
