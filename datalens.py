@@ -7,6 +7,11 @@ from dataclasses import dataclass, field
 
 from skeleton import Skeleton
 
+MAX_COLUMNS_PER_LINE = 12
+
+def tensor_fmt(tensor: torch.tensor):
+    assert tensor.dim() == 1
+    return "[" + (", ".join(map(lambda x: f"{x:10.3f}", tensor.tolist()))) + " ]"
 
 class ColumnLens:
     size: int
@@ -63,9 +68,14 @@ class InputLens:
     def print(self, data: torch.Tensor):
         for attr_name, attr_type in InputLens.__annotations__.items():
             if attr_type == ColumnLens:
-                print(f"{attr_name} = ")
-                for i in self.__dict__[attr_name].indices:
-                    print(f"    {data[i:i+self.__dict__[attr_name].size]}")
+                print(f"    {attr_name} =")
+                tensor_strings = []
+                tensors_per_line = MAX_COLUMNS_PER_LINE // self.__dict__[attr_name].size
+                for i, index in enumerate(self.__dict__[attr_name].indices):
+                    tensor = data[index : index + self.__dict__[attr_name].size]
+                    tensor_strings.append(tensor_fmt(tensor))
+                for i in range(0, len(tensor_strings), tensors_per_line):
+                    print("        " + (", ".join(tensor_strings[i:i+tensors_per_line])))
 
 class OutputLens:
     traj_pos_ip1: ColumnLens
@@ -119,6 +129,11 @@ class OutputLens:
     def print(self, data: torch.Tensor):
         for attr_name, attr_type in InputLens.__annotations__.items():
             if attr_type == ColumnLens:
-                print(f"{attr_name} =")
-                for i in self.__dict__[attr_name].indices:
-                    print(f"    {data[i:i+self.__dict__[attr_name].size]}")
+                print(f"    {attr_name} =")
+                tensor_strings = []
+                tensors_per_line = MAX_COLUMNS_PER_LINE // self.__dict__[attr_name].size
+                for i, index in enumerate(self.__dict__[attr_name].indices):
+                    tensor = data[index : index + self.__dict__[attr_name].size]
+                    tensor_strings.append(tensor_fmt(tensor))
+                for i in range(0, len(tensor_strings), tensors_per_line):
+                    print("        " + (", ".join(tensor_strings[i:i+tensors_per_line])))
