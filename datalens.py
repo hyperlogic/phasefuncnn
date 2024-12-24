@@ -60,6 +60,12 @@ class InputLens:
     def normalize(self, data: torch.Tensor, mean: torch.Tensor, std: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
         return (data - mean) * (w / std)
 
+    def print(self, data: torch.Tensor):
+        for attr_name, attr_type in InputLens.__annotations__.items():
+            if attr_type == ColumnLens:
+                print(f"{attr_name} = ")
+                for i in self.__dict__[attr_name].indices:
+                    print(f"    {data[i:i+self.__dict__[attr_name].size]}")
 
 class OutputLens:
     traj_pos_ip1: ColumnLens
@@ -109,3 +115,10 @@ class OutputLens:
 
     def normalize(self, data: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
         return (data - mean) / std
+
+    def print(self, data: torch.Tensor):
+        for attr_name, attr_type in InputLens.__annotations__.items():
+            if attr_type == ColumnLens:
+                print(f"{attr_name} =")
+                for i in self.__dict__[attr_name].indices:
+                    print(f"    {data[i:i+self.__dict__[attr_name].size]}")

@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from wgpu.gui.auto import WgpuCanvas, run
 
-import dataview
+import datalens
 import math_util as mu
 from pfnn import PFNN
 from skeleton import Skeleton
@@ -31,8 +31,8 @@ def unpickle_obj(filename):
 
 class VisOutputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
-    x_view: dataview.InputView
-    y_view: dataview.OutputView
+    x_lens: datalens.InputLens
+    y_lens: datalens.OutputLens
     model: nn.Module
     x: torch.Tensor
     p: float
@@ -50,8 +50,8 @@ class VisOutputRenderBuddy(RenderBuddy):
     def __init__(
         self,
         skeleton: Skeleton,
-        x_view: dataview.InputView,
-        y_view: dataview.OutputView,
+        x_lens: datalens.InputLens,
+        y_lens: datalens.OutputLens,
         model: nn.Module,
         x: torch.Tensor,
         p: float,
@@ -64,8 +64,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         super().__init__()
 
         self.skeleton = skeleton
-        self.x_view = x_view
-        self.y_view = y_view
+        self.x_lens = x_lens
+        self.y_lens = y_lens
         self.model = model
         self.x = x.clone()
         self.p = p
@@ -77,6 +77,10 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # run inference
         self.y = self.model(self.x, self.p).detach()
+        self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
+
+        axes = gfx.helpers.AxesHelper(3.0, 0.5)
+        self.scene.add(axes)
 
         self.group = gfx.Group()
         self.scene.add(self.group)
@@ -95,16 +99,13 @@ class VisOutputRenderBuddy(RenderBuddy):
         positions = []
         colors = []
 
-        # un-normalize output
-        y = self.y * self.y_std + self.y_mean
-
         for child in skeleton.joint_names:
             child_index = skeleton.get_joint_index(child)
             parent_index = skeleton.get_parent_index(child)
             if parent_index >= 0:
                 # line from p.offset
-                p0 = dataview.get(y, self.y_view, "joint_pos_i", parent_index).tolist()
-                p1 = dataview.get(y, self.y_view, "joint_pos_i", child_index).tolist()
+                p0 = y_lens.joint_pos_i.get(self.y, parent_index).tolist()
+                p1 = y_lens.joint_pos_i.get(self.y, child_index).tolist()
                 positions += [p0, p1]
                 colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
         joint_line = gfx.Line(
@@ -114,8 +115,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
-            p0 = dataview.get(y, self.y_view, "traj_pos_ip1", i)
-            p1 = dataview.get(y, self.y_view, "traj_pos_ip1", i + 1)
+            p0 = y_lens.traj_pos_ip1.get(self.y, i)
+            p1 = y_lens.traj_pos_ip1.get(self.y, i + 1)
             positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
             if i % 2 == 0:
                 colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
@@ -141,22 +142,26 @@ class VisOutputRenderBuddy(RenderBuddy):
         """
 
     def tick_model(self):
-        self.x = torch.zeros(self.x.shape)
+        # self.x = torch.zeros(self.x.shape)
+        self.x = x_lens.unnormalize(self.x, self.x_mean, self.x_std, self.x_w)
 
-        """
+        x_lens.print(self.x)
+
         print("x = ")
+
         for i in range(TRAJ_WINDOW_SIZE):
-            # traj_pos = dataview.get(self.y, self.y_view, "traj_pos_ip1", i)
-            # traj_dir = dataview.get(self.y, self.y_view, "traj_dir_ip1", i)
+            # traj_pos = y_lens.traj_pos_ip1.get(self.y, i)
+            # traj_dir = y_lens.traj_pos_ip1.get(self.y, i)
 
             traj_pos = torch.tensor([0.0, 0.0], dtype=torch.float32, requires_grad=False)
-            traj_dir = torch.tensor([1.0, 0.0], dtype=torch.float32, requires_grad=False)
-            dataview.set(self.x, self.x_view, "traj_pos_i", i, traj_pos)
-            dataview.set(self.x, self.x_view, "traj_vel_i", i, traj_dir * (1 / SAMPLE_RATE))
+            traj_dir = torch.tensor([0.0, -1.0], dtype=torch.float32, requires_grad=False)
+            x_lens.traj_pos_i.set(self.x, i, traj_pos)
+            # x_lens.traj_vel_i.set(self.x, i, traj_dir * (1 / SAMPLE_RATE))
 
-            print(f"    traj_pos_i[{i}] = {dataview.get(self.x, self.x_view, 'traj_pos_i', i)}")
-            print(f"    traj_vel_i[{i}] = {dataview.get(self.x, self.x_view, 'traj_vel_i', i)}")
+            print(f"    traj_pos_i[{i}] = {x_lens.traj_pos_i.get(self.x, i)}")
+            print(f"    traj_vel_i[{i}] = {x_lens.traj_vel_i.get(self.x, i)}")
 
+        """
         # global joint_pos
         g_joint_positions = torch.zeros((self.skeleton.num_joints, 3))
         for i in range(self.skeleton.num_joints):
@@ -167,34 +172,41 @@ class VisOutputRenderBuddy(RenderBuddy):
                 g_joint_positions[i] = g_joint_positions[parent_i] + joint_pos
             else:
                 g_joint_positions[i] = joint_pos
+        """
 
+        """
         for i in range(self.skeleton.num_joints):
-            #joint_pos = dataview.get(self.y, self.y_view, "joint_pos_i", i)
-            #joint_vel = dataview.get(self.y, self.y_view, "joint_vel_i", i)
+            joint_pos = y_lens.joint_pos_i.get(self.y, i)
+            # joint_vel = y_lens.joint_vel_i.get(self.y, i)
 
             joint_name = self.skeleton.get_joint_name(i)
-            joint_pos = g_joint_positions[i]
+            # joint_pos = g_joint_positions[i]
             joint_vel = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32, requires_grad=False)
 
-            dataview.set(self.x, self.x_view, "joint_pos_im1", i, joint_pos)
-            dataview.set(self.x, self.x_view, "joint_vel_im1", i, joint_vel)
+            x_lens.joint_pos_im1.set(self.x, i, joint_pos)
+            x_lens.joint_vel_im1.set(self.x, i, joint_vel)
 
             print(f"    joint_name[{i}] = {joint_name}")
-            print(f"    joint_pos_im1[{i}] = {dataview.get(self.x, self.x_view, 'joint_pos_im1', i)}")
-            print(f"    joint_vel_im1[{i}] = {dataview.get(self.x, self.x_view, 'joint_vel_im1', i)}")
+            print(f"    joint_pos_im1[{i}] = {x_lens.joint_pos_im1.get(self.x, i)}")
+            print(f"    joint_vel_im1[{i}] = {x_lens.joint_vel_im1.get(self.x, i)}")
+        """
 
-        phase_vel = dataview.get(self.y, self.y_view, "phase_vel_i", 0).item()
+        """
+        phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
         self.p += phase_vel * (1 / SAMPLE_RATE)
         self.p = self.p % (2 * math.pi)
+        """
 
         print(f"phase = {self.p}")
 
-        # re-normalize input
-        self.x = (self.x - self.x_mean) * (self.x_w / self.x_std)
-        """
+        # normalize input
+        self.x = x_lens.normalize(self.x, self.x_mean, self.x_std, self.x_w)
 
-        # model inference
         self.y = self.model(self.x, self.p).detach()
+        self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
+
+        # un-normalize output
+
 
     def on_key_down(self, event):
         super().on_key_down(event)
@@ -223,8 +235,8 @@ if __name__ == "__main__":
     # unpickle/load data
     skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
 
-    input_view = dataview.build_input_view(skeleton)
-    output_view = dataview.build_output_view(skeleton)
+    x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
+    y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
 
     print(f"skeleton.num_joints = {skeleton.num_joints}")
 
@@ -235,8 +247,8 @@ if __name__ == "__main__":
     torch.no_grad()
 
     # load model
-    in_features = input_view["num_cols"]
-    out_features = output_view["num_cols"]
+    in_features = x_lens.num_cols
+    out_features = y_lens.num_cols
     print(f"PFNN(in_features = {in_features}, out_features = {out_features}, device = {device}")
     model = PFNN(in_features, out_features, device=device)
     state_dict = torch.load(os.path.join(OUTPUT_DIR, "final_checkpoint.pth"), weights_only=False)
@@ -247,16 +259,12 @@ if __name__ == "__main__":
     X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True)
     X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
     X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
-    # un-normalize input for visualization
-    # X = X * (X_std / X_w) + X_mean
     print(f"X.shape = {X.shape}")
 
     # load output
     Y = torch.load(os.path.join(OUTPUT_DIR, "Y.pth"), weights_only=True)
     Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
-    # un-normalize input for visualiztion
-    # Y = Y * Y_std + Y_mean
 
     # load phase
     P = torch.load(os.path.join(OUTPUT_DIR, "P.pth"), weights_only=True)
@@ -274,6 +282,6 @@ if __name__ == "__main__":
     print(f"loss = {loss}")
 
     render_buddy = VisOutputRenderBuddy(
-        skeleton, input_view, output_view, model, X[1000], P[1000], Y_mean, Y_std, X_mean, X_std, X_w
+        skeleton, x_lens, y_lens, model, X[1000], P[1000], Y_mean, Y_std, X_mean, X_std, X_w
     )
     run()
