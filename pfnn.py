@@ -109,7 +109,7 @@ class PhaseLinear(nn.Module):
 
 
 class PFNN(nn.Module):
-    def __init__(self, in_features: int, out_features: int, device=None):
+    def __init__(self, in_features: int, out_features: int, dropout_rate=0.5, device=None):
         super(PFNN, self).__init__()
 
         # catmull rom basis
@@ -118,11 +118,15 @@ class PFNN(nn.Module):
         )
 
         self.fc1 = PhaseLinear(in_features, 512, self.basis, device=device)
+        self.dropout1 = nn.Dropout(p=dropout_rate)
         self.fc2 = PhaseLinear(512, 512, self.basis, device=device)
+        self.dropout2 = nn.Dropout(p=dropout_rate)
         self.fc3 = PhaseLinear(512, out_features, self.basis, device=device)
 
     def forward(self, x: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
         x = F.relu(self.fc1(x, phase))
+        x = self.dropout1(x)
         x = F.relu(self.fc2(x, phase))
+        x = self.dropout2(x)
         x = self.fc3(x, phase)
         return x

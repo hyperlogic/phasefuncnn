@@ -151,8 +151,8 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         t = torch.linspace(0, 1, 2 * (TRAJ_WINDOW_SIZE // 2) + 1).unsqueeze(1)
 
-        start = nograd_tensor([-50.0, 0.0])
-        end = nograd_tensor([50.0, 0.0])
+        start = nograd_tensor([-10.0, 0.0])
+        end = nograd_tensor([10.0, 0.0])
         traj_positions = (1 - t) * start + t * end
 
         for i in range(TRAJ_WINDOW_SIZE):
@@ -184,14 +184,9 @@ class VisOutputRenderBuddy(RenderBuddy):
         #x_lens.print(self.x)
 
 
-        # normalize input
         self.x = x_lens.normalize(self.x, self.x_mean, self.x_std, self.x_w)
-
         self.y = self.model(self.x, self.p).detach()
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
-
-        # un-normalize output
-
 
     def on_key_down(self, event):
         super().on_key_down(event)
@@ -234,6 +229,7 @@ if __name__ == "__main__":
     out_features = y_lens.num_cols
     print(f"PFNN(in_features = {in_features}, out_features = {out_features}, device = {device}")
     model = PFNN(in_features, out_features, device=device)
+    model.eval()  # deactivate dropout
     state_dict = torch.load(os.path.join(OUTPUT_DIR, "final_checkpoint.pth"), weights_only=False)
     model.load_state_dict(state_dict)
 
@@ -259,10 +255,14 @@ if __name__ == "__main__":
     ii = torch.randint(0, X.shape[0], (1,)).item()
     output = model(X[ii], P[ii])
 
-    criterion = nn.L1Loss()
-    loss = criterion(output, Y[ii])
+    criterion = nn.MSELoss()
+    L1_LAMBDA = 0.01
+    l1_reg = sum(param.abs().sum() for param in model.parameters())
+    loss = criterion(output, Y[ii]) + L1_LAMBDA * l1_reg
 
     print(f"loss = {loss}")
+    print(f"output =")
+    y_lens.print(output)
 
     render_buddy = VisOutputRenderBuddy(
         skeleton, x_lens, y_lens, model, X[2], P[2], Y_mean, Y_std, X_mean, X_std, X_w

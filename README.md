@@ -91,8 +91,8 @@ VISUALIZE
 
 TRAINING
 ----------
-* correct loss function
-* dropout layers
+* DONE: correct loss function
+* DONE: dropout layers
 
 
 

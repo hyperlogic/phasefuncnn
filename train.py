@@ -36,10 +36,15 @@ class MocapDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return self.X[idx], self.Y[idx], self.P[idx]
 
-
+# hyperparameters?
 MAX_EPOCHS = 10000
-BATCH_SIZE = 2048
-VAL_DATASET_FACTOR = 0.1
+BATCH_SIZE = 512
+VAL_DATASET_FACTOR = 0.3  # percentage of data that is reserved for validation set
+L1_LAMBDA = 0.001  # regularization weight
+MAX_EPOCHS_WITHOUT_IMPROVEMENT = 50  # early termination
+CHECKPOINT_CADENCE = 100
+DROPOUT_RATE = 0.3
+LEARNING_RATE = 0.0001
 
 if __name__ == "__main__":
     if len(sys.argv) != 1:
@@ -55,7 +60,7 @@ if __name__ == "__main__":
 
     VAL_DATASET_SIZE = int(len(full_dataset) * VAL_DATASET_FACTOR)
 
-    model = PFNN(full_dataset.X.shape[1], full_dataset.Y.shape[1], device=device)
+    model = PFNN(full_dataset.X.shape[1], full_dataset.Y.shape[1], dropout_rate=DROPOUT_RATE, device=device)
 
     # print model
     print("model =")
@@ -64,8 +69,9 @@ if __name__ == "__main__":
     for name, param in model.named_parameters():
         print(f"    {name}, size = {param.size()}")
 
-    criterion = nn.L1Loss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    criterion = nn.MSELoss()
 
     # split dataset into train and validation sets
     torch.manual_seed(42)
@@ -92,8 +98,6 @@ if __name__ == "__main__":
 
     best_val_loss = float("inf")
     epochs_without_improvement = 0
-    MAX_EPOCHS_WITHOUT_IMPROVEMENT = 10
-    CHECKPOINT_CADENCE = 100
     train_start_time = time.time()
 
     writer = SummaryWriter()
@@ -108,7 +112,8 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
             output = model(x, p)
-            loss = criterion(output, y)
+            l1_reg = sum(param.abs().sum() for param in model.parameters())
+            loss = criterion(output, y) + L1_LAMBDA * l1_reg
 
             writer.add_scalar("Loss/train", loss, epoch)
 
@@ -130,7 +135,8 @@ if __name__ == "__main__":
                 x, y, p = x.to(device), y.to(device), p.to(device)
 
                 output = model(x, p)
-                loss = criterion(output, y)
+                l1_reg = sum(param.abs().sum() for param in model.parameters())
+                loss = criterion(output, y) + L1_LAMBDA * l1_reg
                 writer.add_scalar("Loss/validation", loss, epoch)
                 val_loss += loss.item()
                 val_count += 1

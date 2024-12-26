@@ -127,7 +127,7 @@ class OutputLens:
         return (data - mean) / std
 
     def print(self, data: torch.Tensor):
-        for attr_name, attr_type in InputLens.__annotations__.items():
+        for attr_name, attr_type in OutputLens.__annotations__.items():
             if attr_type == ColumnLens:
                 print(f"    {attr_name} =")
                 tensor_strings = []
