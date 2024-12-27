@@ -40,11 +40,11 @@ class MocapDataset(torch.utils.data.Dataset):
 MAX_EPOCHS = 10000
 BATCH_SIZE = 512
 VAL_DATASET_FACTOR = 0.3  # percentage of data that is reserved for validation set
-L1_LAMBDA = 0.001  # regularization weight
+L1_LAMBDA = 0.0005  # regularization weight
 MAX_EPOCHS_WITHOUT_IMPROVEMENT = 50  # early termination
 CHECKPOINT_CADENCE = 100
 DROPOUT_RATE = 0.3
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.00005
 
 if __name__ == "__main__":
     if len(sys.argv) != 1:
