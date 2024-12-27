@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from skeleton import Skeleton
 
-MAX_COLUMNS_PER_LINE = 12
+MAX_COLUMNS_PER_LINE = 8
 
 def tensor_fmt(tensor: torch.tensor):
     assert tensor.dim() == 1

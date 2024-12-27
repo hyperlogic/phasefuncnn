@@ -5,7 +5,7 @@ class FlyCam:
     """sphere in fluid motion model"""
 
     speed: float  # units per second
-    rotSpeed: float  # radians per second
+    rot_speed: float  # radians per second
     worldUp: np.ndarray  # vec3
     pos: np.ndarray  # vec3
     vel: np.ndarray  # vec3

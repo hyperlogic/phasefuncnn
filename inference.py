@@ -1,3 +1,4 @@
+import cmath
 import math
 import os
 import pickle
@@ -13,6 +14,7 @@ import torch.nn.functional as F
 from wgpu.gui.auto import WgpuCanvas, run
 
 import datalens
+import followcam
 import math_util as mu
 from pfnn import PFNN
 from skeleton import Skeleton
@@ -65,6 +67,12 @@ class VisOutputRenderBuddy(RenderBuddy):
         x_w: torch.Tensor,
     ):
         super().__init__()
+
+        # override flycam with follow cam
+        ORBIT_SPEED = 1.15
+        MOVE_SPEED = 22.5
+        RADIUS = 50
+        self.flycam = followcam.FollowCam(np.array([0, 1, 0]), np.array([0, 0, 0]), RADIUS, MOVE_SPEED, ORBIT_SPEED)
 
         self.skeleton = skeleton
         self.x_lens = x_lens
@@ -134,8 +142,32 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.group.add(traj_line)
         self.scene.add(self.group)
 
+        self.stick_line = gfx.Line(
+            gfx.Geometry(positions=[[0, 0, 0], [0, 0, 0]], colors=[[0, 1, 0, 1], [0, 1, 0, 1]]), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+        )
+        self.scene.add(self.stick_line)
+
     def on_animate(self, dt: float):
         super().on_animate(dt)
+
+        joystick_left_stick = np.array([0, 0], dtype=np.float32)
+        if self.joystick:
+            joystick_left_stick[0] = mu.deadspot(self.joystick.get_axis(0))
+            joystick_left_stick[1] = -mu.deadspot(self.joystick.get_axis(1))
+        left_stick = left_stick = np.clip(self.left_stick + joystick_left_stick, -1, 1)
+
+        # project the stick onto the ground plane, such that up on the stick points towards the camera forward direction.
+        cam_forward = mu.quat_rotate(self.flycam.rot, np.array([0, 0, -1]))
+        theta = math.atan2(cam_forward[2], cam_forward[0])
+        c_stick = cmath.rect(1.0, theta) * complex(left_stick[1], left_stick[0])
+        world_stick = np.array([c_stick.real, 0, c_stick.imag])
+
+        self.scene.remove(self.stick_line)
+        self.stick_line = gfx.Line(
+            gfx.Geometry(positions=[[0, 0, 0], world_stick * 10], colors=[[0, 1, 0, 1], [0, 1, 0, 1]]), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+        )
+        self.scene.add(self.stick_line)
+
         if self.playing:
             self.t += dt
             if self.t > (1 / SAMPLE_RATE):
@@ -151,8 +183,8 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         t = torch.linspace(0, 1, 2 * (TRAJ_WINDOW_SIZE // 2) + 1).unsqueeze(1)
 
-        start = nograd_tensor([-10.0, 0.0])
-        end = nograd_tensor([10.0, 0.0])
+        start = nograd_tensor([-50.0, 0.0])
+        end = nograd_tensor([50.0, 0.0])
         traj_positions = (1 - t) * start + t * end
 
         for i in range(TRAJ_WINDOW_SIZE):

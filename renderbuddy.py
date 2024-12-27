@@ -7,17 +7,11 @@ import pygfx as gfx
 from wgpu.gui.auto import WgpuCanvas, run
 
 import flycam
+import math_util as mu
 
-DEADSPOT_THRESH = 0.15
+
 KEY_REPEAT_DELAY = 1 / 2
 KEY_REPEAT_RATE = 1 / 20
-
-
-def deadspot(val: float) -> float:
-    if np.abs(val) > DEADSPOT_THRESH:
-        return val
-    else:
-        return 0
 
 
 class RenderBuddy:
@@ -184,10 +178,10 @@ class RenderBuddy:
         joystick_up_amount = 0
 
         if self.joystick:
-            joystick_left_stick[0] = deadspot(self.joystick.get_axis(0))
-            joystick_left_stick[1] = deadspot(-self.joystick.get_axis(1))
-            joystick_right_stick[0] = deadspot(self.joystick.get_axis(2))
-            joystick_right_stick[1] = deadspot(-self.joystick.get_axis(3))
+            joystick_left_stick[0] = mu.deadspot(self.joystick.get_axis(0))
+            joystick_left_stick[1] = mu.deadspot(-self.joystick.get_axis(1))
+            joystick_right_stick[0] = mu.deadspot(self.joystick.get_axis(2))
+            joystick_right_stick[1] = mu.deadspot(-self.joystick.get_axis(3))
 
             if self.joystick.get_button(4):  # Left Bumper
                 joystick_roll_amount += 1

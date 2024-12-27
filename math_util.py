@@ -2,9 +2,22 @@ import math
 import numpy as np
 import pickle
 
+DEADSPOT_THRESH = 0.15
+
 
 def normalize(v: np.ndarray) -> np.ndarray:
-    return v / np.linalg.norm(v)
+    norm = np.linalg.norm(v)
+    if norm > 0:
+        return v / np.linalg.norm(v)
+    else:
+        return np.array([1, 0, 0])
+
+
+def deadspot(val: float) -> float:
+    if np.abs(val) > DEADSPOT_THRESH:
+        return val
+    else:
+        return 0
 
 
 def expmap(v):
@@ -240,5 +253,5 @@ def orthogonalize_camera_mat(z: np.ndarray, y: np.ndarray, pos: np.ndarray) -> n
 
 def build_look_at_mat(eye: np.ndarray, target: np.ndarray, up: np.ndarray) -> np.ndarray:
     z = -normalize(target - eye)
-    camera_mat = orthogonalize_camera_mat(z, y, eye)
+    camera_mat = orthogonalize_camera_mat(z, up, eye)
     return camera_mat
