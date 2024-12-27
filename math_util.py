@@ -221,3 +221,24 @@ def mat_mirror(m):
     mm[0:3, 3] = m[0:3, 3]
     mm[0, 3] = -m[0, 3]
     return mm
+
+def orthogonalize_camera_mat(z: np.ndarray, y: np.ndarray, pos: np.ndarray) -> np.ndarray:
+    # make sure that camera_mat will be orthogonal, and aligned with world up (y).
+    camera_mat = np.eye(4)
+    if np.dot(z, y) < 0.999:  # if w are aren't looking stright up.
+        xx = normalize(np.linalg.cross(y, z))
+        yy = normalize(np.linalg.cross(z, xx))
+        camera_mat[:3, 0] = xx
+        camera_mat[:3, 1] = yy
+        camera_mat[:3, 2] = z
+        camera_mat[:3, 3] = pos
+    else:
+        camera_mat[:3, 3] = pos
+    return camera_mat
+
+
+def build_look_at_mat(eye: np.ndarray, target: np.ndarray, up: np.ndarray) -> np.ndarray:
+    z = -normalize(target - eye)
+    camera_mat = orthogonalize_camera_mat(z, y, eye)
+    return camera_mat
+
