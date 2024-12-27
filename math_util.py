@@ -222,6 +222,7 @@ def mat_mirror(m):
     mm[0, 3] = -m[0, 3]
     return mm
 
+
 def orthogonalize_camera_mat(z: np.ndarray, y: np.ndarray, pos: np.ndarray) -> np.ndarray:
     # make sure that camera_mat will be orthogonal, and aligned with world up (y).
     camera_mat = np.eye(4)
@@ -241,4 +242,3 @@ def build_look_at_mat(eye: np.ndarray, target: np.ndarray, up: np.ndarray) -> np
     z = -normalize(target - eye)
     camera_mat = orthogonalize_camera_mat(z, y, eye)
     return camera_mat
-
