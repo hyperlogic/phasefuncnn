@@ -25,6 +25,59 @@ def unpickle_obj(filename):
         return pickle.load(f)
 
 
+def bone_geometry(base: np.ndarray) -> gfx.Geometry:
+    zero = np.array([0, 0, 0])
+    up = np.array([0, 1, 0])
+    mat = mu.build_look_at_mat(base, zero, up)
+    l = np.linalg.norm(base)
+    width = l * 0.1
+    z_offset = l * 0.2
+    local_positions = np.array([[0, 0, 0, 1],
+                                [ width, width, -z_offset, 1],
+                                [-width, width, -z_offset, 1],
+                                [-width, -width, -z_offset, 1],
+                                [ width, -width, -z_offset, 1],
+                                [0, 0, -l, 1]])
+    positions = (mat @ np.expand_dims(local_positions, axis=-1))[:, 0:3].squeeze().astype(np.float32)
+    indices = np.array([[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1],
+                        [5, 2, 1], [5, 3, 2], [5, 4, 3], [5, 1, 4]], dtype=np.int32)
+    geom = gfx.Geometry(
+        indices=indices,
+        positions=positions,
+    )
+    return geom
+
+
+def add_skeleton_mesh(skeleton: Skeleton, node: gfx.WorldObject):
+    world_offsets = np.zeros((skeleton.num_joints, 3))
+    for child in skeleton.joint_names:
+        child_index = skeleton.get_joint_index(child)
+        parent_index = skeleton.get_parent_index(child)
+        if parent_index >= 0:
+            offset = world_offsets[parent_index] + skeleton.get_joint_offset(child)
+        else:
+            offset = skeleton.get_joint_offset(child)
+        world_offsets[child_index] = offset
+
+    for child in skeleton.joint_names:
+        child_index = skeleton.get_joint_index(child)
+        parent_index = skeleton.get_parent_index(child)
+        if parent_index >= 0:
+            bone = gfx.Mesh(
+                bone_geometry(-np.array(skeleton.get_joint_offset(child))),
+                gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True),
+            )
+            bone.local.position = world_offsets[child_index]
+            node.add(bone)
+        else:
+            bone = gfx.Mesh(
+                bone_geometry(np.array([0, 0, 0])),
+                gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True),
+            )
+            bone.local.position = world_offsets[child_index]
+            node.add(bone)
+
+
 class VisOutputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
     y_lens: datalens.OutputLens
@@ -35,15 +88,19 @@ class VisOutputRenderBuddy(RenderBuddy):
     canvas: WgpuCanvas
     playing: bool
 
-    def __init__(self, skeleton: Skeleton, output_view: datalens.OutputLens, Y: torch.Tensor):
+    def __init__(self, skeleton: Skeleton, y_lens: datalens.OutputLens, Y: torch.Tensor):
         super().__init__()
 
         self.skeleton = skeleton
-        self.output_view = output_view
+        self.y_lens = y_lens
         self.Y = Y
 
         self.row_group = gfx.Group()
         self.scene.add(self.row_group)
+
+        self.skeleton_group = gfx.Group()
+        add_skeleton_mesh(self.skeleton, self.skeleton_group)
+        self.scene.add(self.skeleton_group)
 
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
 
@@ -55,28 +112,37 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.scene.remove(self.row_group)
         self.row_group = gfx.Group()
 
+        Y_row = self.Y[row]
+
+        print(f"num_joints {self.skeleton.num_joints}, num_children = {len(self.skeleton_group.children)}")
+        for i in range(self.skeleton.num_joints):
+            exp = self.y_lens.joint_rot_i.get(Y_row, i)
+            rot = mu.expmap(exp)
+            self.skeleton_group.children[i].local.rotation = rot
+
+        """
         positions = []
         colors = []
 
-        Y_row = self.Y[row]
         for child in skeleton.joint_names:
             child_index = skeleton.get_joint_index(child)
             parent_index = skeleton.get_parent_index(child)
             if parent_index >= 0:
                 # line from p.offset
-                p0 = y_lens.joint_pos_i.get(Y_row, parent_index).tolist()
-                p1 = y_lens.joint_pos_i.get(Y_row, child_index).tolist()
+                p0 = self.y_lens.joint_pos_i.get(Y_row, parent_index).tolist()
+                p1 = self.y_lens.joint_pos_i.get(Y_row, child_index).tolist()
                 positions += [p0, p1]
                 colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
         joint_line = gfx.Line(
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
+        """
 
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
-            p0 = y_lens.traj_pos_ip1.get(Y_row, i)
-            p1 = y_lens.traj_pos_ip1.get(Y_row, i + 1)
+            p0 = self.y_lens.traj_pos_ip1.get(Y_row, i)
+            p1 = self.y_lens.traj_pos_ip1.get(Y_row, i + 1)
             positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
             if i % 2 == 0:
                 colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
@@ -87,7 +153,7 @@ class VisOutputRenderBuddy(RenderBuddy):
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
 
-        self.row_group.add(joint_line)
+        #self.row_group.add(joint_line)
         self.row_group.add(traj_line)
         self.scene.add(self.row_group)
 

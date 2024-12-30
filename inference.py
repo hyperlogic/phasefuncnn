@@ -53,6 +53,52 @@ def add_skeleton_lines(skeleton: Skeleton, node: gfx.WorldObject, y_lens: datale
     node.add(joint_line)
 
 
+def bone_geometry(base: np.ndarray) -> gfx.Geometry:
+    zero = np.array([0, 0, 0])
+    up = np.array([0, 1, 0])
+    mat = mu.build_look_at_mat(base, zero, up)
+    l = np.linalg.norm(base)
+    width = l * 0.1
+    z_offset = l * 0.2
+    local_positions = np.array([[0, 0, 0, 1],
+                                [ width, width, -z_offset, 1],
+                                [-width, width, -z_offset, 1],
+                                [-width, -width, -z_offset, 1],
+                                [ width, -width, -z_offset, 1],
+                                [0, 0, -l, 1]])
+    positions = (mat @ np.expand_dims(local_positions, axis=-1))[:, 0:3].squeeze().astype(np.float32)
+    indices = np.array([[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1],
+                        [5, 2, 1], [5, 3, 2], [5, 4, 3], [5, 1, 4]], dtype=np.int32)
+    geom = gfx.Geometry(
+        indices=indices,
+        positions=positions,
+    )
+    return geom
+
+
+def add_skeleton_mesh(skeleton: Skeleton, node: gfx.WorldObject):
+    world_offsets = np.zeros((skeleton.num_joints, 3))
+    for child in skeleton.joint_names:
+        child_index = skeleton.get_joint_index(child)
+        parent_index = skeleton.get_parent_index(child)
+        if parent_index >= 0:
+            offset = world_offsets[parent_index] + skeleton.get_joint_offset(child)
+        else:
+            offset = skeleton.get_joint_offset(child)
+        world_offsets[child_index] = offset
+
+    for child in skeleton.joint_names:
+        child_index = skeleton.get_joint_index(child)
+        parent_index = skeleton.get_parent_index(child)
+        if parent_index >= 0:
+            bone = gfx.Mesh(
+                bone_geometry(-np.array(skeleton.get_joint_offset(child))),
+                gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True),
+            )
+            bone.local.position = world_offsets[child_index]
+            node.add(bone)
+
+
 class VisOutputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
     x_lens: datalens.InputLens
@@ -114,6 +160,10 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         self.group = gfx.Group()
         self.scene.add(self.group)
+
+        self.skeleton_group = gfx.Group()
+        add_skeleton_mesh(self.skeleton, self.skeleton_group)
+        self.scene.add(self.skeleton_group)
 
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
 
