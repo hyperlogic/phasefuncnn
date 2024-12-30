@@ -1,3 +1,4 @@
+import glob
 import os
 import pickle
 import sys
@@ -113,22 +114,17 @@ class VisOutputRenderBuddy(RenderBuddy):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Error: expected mocap filename (without .bvh extension)")
-        exit(1)
+    # unpickle skeleton
+    # pick ANY skeleton in the output dir, they should all be the same.
+    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "*_skeleton.pkl"))
+    assert len(skeleton_files) > 0, "could not find any pickled skeletons in output folder"
+    skeleton = unpickle_obj(skeleton_files[0])
 
-    mocap_basename = sys.argv[1]
-    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
-
-    # unpickle/load data
-    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
+    # load output
     y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
-
-    print(f"skeleton.num_joints = {skeleton.num_joints}")
     Y = torch.load(os.path.join(OUTPUT_DIR, "Y.pth"), weights_only=True)
     Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
-    print(f"Y.shape = {Y.shape}")
 
     assert y_lens.num_cols == Y.shape[1]
 

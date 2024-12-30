@@ -1,4 +1,5 @@
 import cmath
+import glob
 import math
 import os
 import pickle
@@ -32,6 +33,24 @@ def unpickle_obj(filename):
 
 def nograd_tensor(array: list[float]):
     return torch.tensor(array, dtype=torch.float32, requires_grad=False)
+
+
+def add_skeleton_lines(skeleton: Skeleton, node: gfx.WorldObject, y_lens: datalens.OutputLens, y: torch.Tensor()):
+    positions = []
+    colors = []
+    for child in skeleton.joint_names:
+        child_index = skeleton.get_joint_index(child)
+        parent_index = skeleton.get_parent_index(child)
+        if parent_index >= 0:
+            # line from p.offset
+            p0 = y_lens.joint_pos_i.get(y, parent_index).tolist()
+            p1 = y_lens.joint_pos_i.get(y, child_index).tolist()
+            positions += [p0, p1]
+            colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
+    joint_line = gfx.Line(
+        gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+    )
+    node.add(joint_line)
 
 
 class VisOutputRenderBuddy(RenderBuddy):
@@ -107,21 +126,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.scene.remove(self.group)
         self.group = gfx.Group()
 
-        positions = []
-        colors = []
-
-        for child in skeleton.joint_names:
-            child_index = skeleton.get_joint_index(child)
-            parent_index = skeleton.get_parent_index(child)
-            if parent_index >= 0:
-                # line from p.offset
-                p0 = y_lens.joint_pos_i.get(self.y, parent_index).tolist()
-                p1 = y_lens.joint_pos_i.get(self.y, child_index).tolist()
-                positions += [p0, p1]
-                colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
-        joint_line = gfx.Line(
-            gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
-        )
+        add_skeleton_lines(self.skeleton, self.group, self.y_lens, self.y)
 
         positions = []
         colors = []
@@ -138,7 +143,6 @@ class VisOutputRenderBuddy(RenderBuddy):
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
 
-        self.group.add(joint_line)
         self.group.add(traj_line)
         self.scene.add(self.group)
 
@@ -235,15 +239,12 @@ class VisOutputRenderBuddy(RenderBuddy):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Error: expected mocap filename (without .bvh extension)")
-        exit(1)
 
-    mocap_basename = sys.argv[1]
-    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
-
-    # unpickle/load data
-    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
+    # unpickle skeleton
+    # pick ANY skeleton in the output dir, they should all be the same.
+    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "*_skeleton.pkl"))
+    assert len(skeleton_files) > 0, "could not find any pickled skeletons in output folder"
+    skeleton = unpickle_obj(skeleton_files[0])
 
     x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
     y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)

@@ -80,19 +80,17 @@ shape = (num_rows, 1)
 
 TODO:
 -------------------------
+* DONE: omit skeleton argument from vis_input vis_output and inference.
+* Tender maya style bone mesh.
 
 BUILD
 -----------
-dump "views" for input and output tensors.
+* dump "views" for input and output tensors.
 
 VISUALIZE
 -----------
-* do inference with joystick controls
+* Do inference with joystick controls
 
-TRAINING
-----------
-* DONE: correct loss function
-* DONE: dropout layers
 
 
 
