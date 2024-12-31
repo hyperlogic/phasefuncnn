@@ -199,6 +199,14 @@ def quat_conj(q: np.ndarray) -> np.ndarray:
     return np.array([-q[0], -q[1], -q[2], q[3]])
 
 
+def quat_normalize(q: np.ndarray) -> np.ndarray:
+    return q / np.linalg.norm(q)
+
+
+def quat_inverse(q: np.ndarray) -> np.ndarray:
+    return quat_conj(quat_normalize(q))
+
+
 def quat_mul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """
     quaternion multiplication

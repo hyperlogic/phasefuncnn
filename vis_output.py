@@ -1,12 +1,11 @@
 import glob
 import os
 import pickle
-import sys
-from typing import Tuple, TypedDict
+from typing import Tuple
 
 import numpy as np
 import pygfx as gfx
-import flycam
+import skeleton
 import torch
 from wgpu.gui.auto import WgpuCanvas, run
 
@@ -25,11 +24,10 @@ def unpickle_obj(filename):
         return pickle.load(f)
 
 
-def bone_geometry(base: np.ndarray) -> gfx.Geometry:
-    zero = np.array([0, 0, 0])
+def build_bone_mesh(base: np.ndarray, tip: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     up = np.array([0, 1, 0])
-    mat = mu.build_look_at_mat(base, zero, up)
-    l = np.linalg.norm(base)
+    mat = mu.build_look_at_mat(base, tip, up)
+    l = np.linalg.norm(base - tip)
     width = l * 0.1
     z_offset = l * 0.2
     local_positions = np.array([[0, 0, 0, 1],
@@ -41,41 +39,55 @@ def bone_geometry(base: np.ndarray) -> gfx.Geometry:
     positions = (mat @ np.expand_dims(local_positions, axis=-1))[:, 0:3].squeeze().astype(np.float32)
     indices = np.array([[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1],
                         [5, 2, 1], [5, 3, 2], [5, 4, 3], [5, 1, 4]], dtype=np.int32)
-    geom = gfx.Geometry(
-        indices=indices,
-        positions=positions,
-    )
-    return geom
+    return positions, indices
 
 
-def add_skeleton_mesh(skeleton: Skeleton, node: gfx.WorldObject):
-    world_offsets = np.zeros((skeleton.num_joints, 3))
-    for child in skeleton.joint_names:
-        child_index = skeleton.get_joint_index(child)
-        parent_index = skeleton.get_parent_index(child)
-        if parent_index >= 0:
-            offset = world_offsets[parent_index] + skeleton.get_joint_offset(child)
+def add_skeleton_mesh(skeleton: Skeleton, root_node: gfx.WorldObject) -> list[gfx.WorldObject]:
+    zero = np.array([0, 0, 0], dtype=np.float32)
+    BONE_VERTEX_COUNT = 6
+    BONE_TRIANGLE_COUNT = 8
+    bones = []
+    for joint_name in skeleton.joint_names:
+        children_indices = skeleton.get_children_indices(joint_name)
+        num_children = len(children_indices)
+        if num_children > 0:
+            # pre allocate verts and tris with correct size.
+            verts = np.zeros((len(children_indices) * BONE_VERTEX_COUNT, 3), dtype=np.float32)
+            tris = np.zeros((len(children_indices) * BONE_TRIANGLE_COUNT, 3), dtype=np.int32)
+
+            # for each bone, insert attributes into verts and tris
+            for i, child_index in enumerate(children_indices):
+                child_name = skeleton.get_joint_name(child_index)
+                tip = np.array(skeleton.get_joint_offset(child_name))
+                pp, ii = build_bone_mesh(zero, tip)
+                vert_start_index = i * BONE_VERTEX_COUNT
+                tri_start_index = i * BONE_TRIANGLE_COUNT
+                verts[vert_start_index:vert_start_index + BONE_VERTEX_COUNT] = pp
+                tris[tri_start_index:tri_start_index + BONE_TRIANGLE_COUNT] = ii + vert_start_index
+
+            # build the geometry
+            geom = gfx.Geometry(positions=verts, indices=tris)
+            bone = gfx.Mesh(geom, gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True))
+
+            # set local transform, zero rot
+            bone.local.position = np.array(skeleton.get_joint_offset(joint_name))
+
+            bones.append(bone)
         else:
-            offset = skeleton.get_joint_offset(child)
-        world_offsets[child_index] = offset
+            # this joint has no children so just create a group node. (TODO: maybe add a sphere? or a small joint?)
+            bones.append(gfx.Group())
 
-    for child in skeleton.joint_names:
-        child_index = skeleton.get_joint_index(child)
-        parent_index = skeleton.get_parent_index(child)
+    # link nodes up to their parents
+    for joint_name in skeleton.joint_names:
+        joint_index = skeleton.get_joint_index(joint_name)
+        parent_index = skeleton.get_parent_index(joint_name)
         if parent_index >= 0:
-            bone = gfx.Mesh(
-                bone_geometry(-np.array(skeleton.get_joint_offset(child))),
-                gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True),
-            )
-            bone.local.position = world_offsets[child_index]
-            node.add(bone)
-        else:
-            bone = gfx.Mesh(
-                bone_geometry(np.array([0, 0, 0])),
-                gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True),
-            )
-            bone.local.position = world_offsets[child_index]
-            node.add(bone)
+            bones[parent_index].add(bones[joint_index])
+
+    # add hips of skeleton to root_node
+    root_node.add(bones[0])
+
+    return bones
 
 
 class VisOutputRenderBuddy(RenderBuddy):
@@ -99,7 +111,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.scene.add(self.row_group)
 
         self.skeleton_group = gfx.Group()
-        add_skeleton_mesh(self.skeleton, self.skeleton_group)
+        self.bones = add_skeleton_mesh(self.skeleton, self.skeleton_group)
+
         self.scene.add(self.skeleton_group)
 
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
@@ -114,30 +127,30 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         Y_row = self.Y[row]
 
-        print(f"num_joints {self.skeleton.num_joints}, num_children = {len(self.skeleton_group.children)}")
+        # rotate the bones!
+        global_rots = np.array([0, 0, 0, 1]) * np.ones((self.skeleton.num_joints, 4))
         for i in range(self.skeleton.num_joints):
+            # extract rotation exponent from output
             exp = self.y_lens.joint_rot_i.get(Y_row, i)
-            rot = mu.expmap(exp)
-            self.skeleton_group.children[i].local.rotation = rot
 
-        """
-        positions = []
-        colors = []
+            # convert into a quaternion
+            global_rots[i] = mu.expmap(exp)
 
-        for child in skeleton.joint_names:
-            child_index = skeleton.get_joint_index(child)
-            parent_index = skeleton.get_parent_index(child)
+            # transform rotations from global_rot to local_rot
+            joint_name = self.skeleton.get_joint_name(i)
+            parent_index = self.skeleton.get_parent_index(joint_name)
             if parent_index >= 0:
-                # line from p.offset
-                p0 = self.y_lens.joint_pos_i.get(Y_row, parent_index).tolist()
-                p1 = self.y_lens.joint_pos_i.get(Y_row, child_index).tolist()
-                positions += [p0, p1]
-                colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
-        joint_line = gfx.Line(
-            gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
-        )
-        """
+                local_rot = mu.quat_mul(mu.quat_inverse(global_rots[parent_index]), global_rots[i])
+            else:
+                local_rot = global_rots[i]
 
+            self.bones[i].local.rotation = local_rot
+
+        # update pelvis pos
+        pelvis_pos = self.y_lens.joint_pos_i.get(Y_row, 0).tolist()
+        self.bones[0].local.position = pelvis_pos
+
+        # create a line mesh for the trajectory
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
@@ -153,7 +166,6 @@ class VisOutputRenderBuddy(RenderBuddy):
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
 
-        #self.row_group.add(joint_line)
         self.row_group.add(traj_line)
         self.scene.add(self.row_group)
 
