@@ -8,23 +8,25 @@ from typing import Tuple, TypedDict
 
 import numpy as np
 import pygfx as gfx
-import flycam
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from wgpu.gui.auto import WgpuCanvas, run
 
 import datalens
+import flycam
 import followcam
 import math_util as mu
+import skeleton_mesh
 from pfnn import PFNN
-from skeleton import Skeleton
 from renderbuddy import RenderBuddy
+from skeleton import Skeleton
 
 OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 SAMPLE_RATE = 60
+
 
 def unpickle_obj(filename):
     with open(filename, "rb") as f:
@@ -33,70 +35,6 @@ def unpickle_obj(filename):
 
 def nograd_tensor(array: list[float]):
     return torch.tensor(array, dtype=torch.float32, requires_grad=False)
-
-
-def add_skeleton_lines(skeleton: Skeleton, node: gfx.WorldObject, y_lens: datalens.OutputLens, y: torch.Tensor()):
-    positions = []
-    colors = []
-    for child in skeleton.joint_names:
-        child_index = skeleton.get_joint_index(child)
-        parent_index = skeleton.get_parent_index(child)
-        if parent_index >= 0:
-            # line from p.offset
-            p0 = y_lens.joint_pos_i.get(y, parent_index).tolist()
-            p1 = y_lens.joint_pos_i.get(y, child_index).tolist()
-            positions += [p0, p1]
-            colors += [[1, 1, 1, 1], [0.5, 0.5, 1, 1]]
-    joint_line = gfx.Line(
-        gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
-    )
-    node.add(joint_line)
-
-
-def bone_geometry(base: np.ndarray) -> gfx.Geometry:
-    zero = np.array([0, 0, 0])
-    up = np.array([0, 1, 0])
-    mat = mu.build_look_at_mat(base, zero, up)
-    l = np.linalg.norm(base)
-    width = l * 0.1
-    z_offset = l * 0.2
-    local_positions = np.array([[0, 0, 0, 1],
-                                [ width, width, -z_offset, 1],
-                                [-width, width, -z_offset, 1],
-                                [-width, -width, -z_offset, 1],
-                                [ width, -width, -z_offset, 1],
-                                [0, 0, -l, 1]])
-    positions = (mat @ np.expand_dims(local_positions, axis=-1))[:, 0:3].squeeze().astype(np.float32)
-    indices = np.array([[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1],
-                        [5, 2, 1], [5, 3, 2], [5, 4, 3], [5, 1, 4]], dtype=np.int32)
-    geom = gfx.Geometry(
-        indices=indices,
-        positions=positions,
-    )
-    return geom
-
-
-def add_skeleton_mesh(skeleton: Skeleton, node: gfx.WorldObject):
-    world_offsets = np.zeros((skeleton.num_joints, 3))
-    for child in skeleton.joint_names:
-        child_index = skeleton.get_joint_index(child)
-        parent_index = skeleton.get_parent_index(child)
-        if parent_index >= 0:
-            offset = world_offsets[parent_index] + skeleton.get_joint_offset(child)
-        else:
-            offset = skeleton.get_joint_offset(child)
-        world_offsets[child_index] = offset
-
-    for child in skeleton.joint_names:
-        child_index = skeleton.get_joint_index(child)
-        parent_index = skeleton.get_parent_index(child)
-        if parent_index >= 0:
-            bone = gfx.Mesh(
-                bone_geometry(-np.array(skeleton.get_joint_offset(child))),
-                gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True),
-            )
-            bone.local.position = world_offsets[child_index]
-            node.add(bone)
 
 
 class VisOutputRenderBuddy(RenderBuddy):
@@ -137,7 +75,10 @@ class VisOutputRenderBuddy(RenderBuddy):
         ORBIT_SPEED = 1.15
         MOVE_SPEED = 22.5
         RADIUS = 50
-        self.flycam = followcam.FollowCam(np.array([0, 1, 0]), np.array([0, 0, 0]), RADIUS, MOVE_SPEED, ORBIT_SPEED)
+        target_y = 15
+        self.flycam = followcam.FollowCam(
+            np.array([0, 1, 0]), np.array([0, target_y, 0]), RADIUS, MOVE_SPEED, ORBIT_SPEED
+        )
 
         self.skeleton = skeleton
         self.x_lens = x_lens
@@ -162,7 +103,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.scene.add(self.group)
 
         self.skeleton_group = gfx.Group()
-        add_skeleton_mesh(self.skeleton, self.skeleton_group)
+        self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
@@ -172,12 +113,41 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.playing = False
         self.t = 0.0
 
+        # used to render joystick dir in world space
+        self.stick_line = gfx.Line(
+            gfx.Geometry(positions=[[0, 0, 0], [0, 0, 0]], colors=[[0, 1, 0, 1], [0, 1, 0, 1]]),
+            gfx.LineSegmentMaterial(thickness=2, color_mode="vertex"),
+        )
+        self.scene.add(self.stick_line)
+
     def retain_output(self):
         self.scene.remove(self.group)
         self.group = gfx.Group()
 
-        add_skeleton_lines(self.skeleton, self.group, self.y_lens, self.y)
+        # rotate the bones!
+        global_rots = np.array([0, 0, 0, 1]) * np.ones((self.skeleton.num_joints, 4))
+        for i in range(self.skeleton.num_joints):
+            # extract rotation exponent from output
+            exp = self.y_lens.joint_rot_i.get(self.y, i)
 
+            # convert into a quaternion
+            global_rots[i] = mu.expmap(exp)
+
+            # transform rotations from global_rot to local_rot
+            joint_name = self.skeleton.get_joint_name(i)
+            parent_index = self.skeleton.get_parent_index(joint_name)
+            if parent_index >= 0:
+                local_rot = mu.quat_mul(mu.quat_inverse(global_rots[parent_index]), global_rots[i])
+            else:
+                local_rot = global_rots[i]
+
+            self.bones[i].local.rotation = local_rot
+
+        # update pelvis pos
+        pelvis_pos = self.y_lens.joint_pos_i.get(self.y, 0).tolist()
+        self.bones[0].local.position = pelvis_pos
+
+        # create lines for the trajectory
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
@@ -196,11 +166,6 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.group.add(traj_line)
         self.scene.add(self.group)
 
-        self.stick_line = gfx.Line(
-            gfx.Geometry(positions=[[0, 0, 0], [0, 0, 0]], colors=[[0, 1, 0, 1], [0, 1, 0, 1]]), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
-        )
-        self.scene.add(self.stick_line)
-
     def on_animate(self, dt: float):
         super().on_animate(dt)
 
@@ -218,7 +183,8 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         self.scene.remove(self.stick_line)
         self.stick_line = gfx.Line(
-            gfx.Geometry(positions=[[0, 0, 0], world_stick * 10], colors=[[0, 1, 0, 1], [0, 1, 0, 1]]), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+            gfx.Geometry(positions=[[0, 0, 0], world_stick * 10], colors=[[0, 1, 0, 1], [0, 1, 0, 1]]),
+            gfx.LineSegmentMaterial(thickness=2, color_mode="vertex"),
         )
         self.scene.add(self.stick_line)
 
@@ -232,8 +198,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         # self.x = torch.zeros(self.x.shape)
         self.x = x_lens.unnormalize(self.x, self.x_mean, self.x_std, self.x_w)
 
-        #print("x0 =")
-        #x_lens.print(self.x)
+        # print("x0 =")
+        # x_lens.print(self.x)
 
         t = torch.linspace(0, 1, 2 * (TRAJ_WINDOW_SIZE // 2) + 1).unsqueeze(1)
 
@@ -266,9 +232,8 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         print(f"phase = {self.p}, phase_vel = {phase_vel}")
 
-        #print("x1 =")
-        #x_lens.print(self.x)
-
+        # print("x1 =")
+        # x_lens.print(self.x)
 
         self.x = x_lens.normalize(self.x, self.x_mean, self.x_std, self.x_w)
         self.y = self.model(self.x, self.p).detach()
@@ -347,7 +312,5 @@ if __name__ == "__main__":
     print(f"output =")
     y_lens.print(output)
 
-    render_buddy = VisOutputRenderBuddy(
-        skeleton, x_lens, y_lens, model, X[2], P[2], Y_mean, Y_std, X_mean, X_std, X_w
-    )
+    render_buddy = VisOutputRenderBuddy(skeleton, x_lens, y_lens, model, X[2], P[2], Y_mean, Y_std, X_mean, X_std, X_w)
     run()

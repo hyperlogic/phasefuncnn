@@ -48,7 +48,8 @@ class FollowCam:
 
         rot = mu.quat_mul(mu.quat_mul(yaw, pitch), self.rot)
 
-        self.pos = mu.quat_rotate(rot, np.array([0, 0, self.radius], dtype=np.float32))
+        self.pos = mu.quat_rotate(rot, np.array([0, 0, self.radius], dtype=np.float32)) + self.target
+
         # make sure that cameraMat will be orthogonal, and aligned with world up.
         camera_mat = mu.build_look_at_mat(self.pos, self.target, self.world_up)
         self.rot = mu.quat_from_mat(camera_mat)
