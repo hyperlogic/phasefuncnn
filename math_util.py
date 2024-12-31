@@ -123,6 +123,32 @@ def build_mat_from_quat(mat, quat):
     return mat
 
 
+def build_mat_from_quat_pos(mat, quat, pos):
+    x, y, z, w = quat
+
+    # Compute the matrix elements
+    mat[0] = [
+        1 - 2 * y**2 - 2 * z**2,
+        2 * x * y - 2 * z * w,
+        2 * x * z + 2 * y * w,
+        0,
+    ]
+    mat[1] = [
+        2 * x * y + 2 * z * w,
+        1 - 2 * x**2 - 2 * z**2,
+        2 * y * z - 2 * x * w,
+        0,
+    ]
+    mat[2] = [
+        2 * x * z - 2 * y * w,
+        2 * y * z + 2 * x * w,
+        1 - 2 * x**2 - 2 * y**2,
+        0,
+    ]
+    mat[0:3, 3] = pos
+    return mat
+
+
 def quat_from_mat(mat):
     # Extract the rotation part of the matrix (top-left 3x3)
     m = mat[:3, :3]

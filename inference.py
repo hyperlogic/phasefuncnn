@@ -147,6 +147,15 @@ class VisOutputRenderBuddy(RenderBuddy):
         pelvis_pos = self.y_lens.joint_pos_i.get(self.y, 0).tolist()
         self.bones[0].local.position = pelvis_pos
 
+        # apply root motion!
+        root_vel = np.array([y_lens.root_vel_i.get(self.y, 0)[0], 0, y_lens.root_vel_i.get(self.y, 0)[1]])
+        root_angvel = y_lens.root_angvel_i.get(self.y, 0).item()
+        dt = (1 / SAMPLE_RATE)
+        root_pos = self.skeleton_group.local.position
+        root_rot = self.skeleton_group.local.rotation
+        self.skeleton_group.local.position = root_pos + mu.quat_rotate(root_rot, root_vel * dt)
+        self.skeleton_group.local.rotation = mu.quat_mul(mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_rot)
+
         # create lines for the trajectory
         positions = []
         colors = []

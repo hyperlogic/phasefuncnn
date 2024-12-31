@@ -18,6 +18,7 @@ from skeleton import Skeleton
 OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
+SAMPLE_RATE = 60
 
 
 def unpickle_obj(filename):
@@ -42,23 +43,19 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.y_lens = y_lens
         self.Y = Y
 
-        self.row_group = gfx.Group()
-        self.scene.add(self.row_group)
-
         self.skeleton_group = gfx.Group()
+        self.traj_line = gfx.Group()
+        self.skeleton_group.add(self.traj_line)
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
-
         self.scene.add(self.skeleton_group)
 
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
 
         self.playing = False
-        self.retain_row(0)
+        self.animate_skeleton(0)
 
-    def retain_row(self, row: int):
+    def animate_skeleton(self, row: int):
         self.row = row
-        self.scene.remove(self.row_group)
-        self.row_group = gfx.Group()
 
         Y_row = self.Y[row]
 
@@ -85,7 +82,23 @@ class VisOutputRenderBuddy(RenderBuddy):
         pelvis_pos = self.y_lens.joint_pos_i.get(Y_row, 0).tolist()
         self.bones[0].local.position = pelvis_pos
 
-        # create a line mesh for the trajectory
+        # apply root motion!
+        root_vel = np.array([y_lens.root_vel_i.get(Y_row, 0)[0], 0, y_lens.root_vel_i.get(Y_row, 0)[1]])
+        root_angvel = y_lens.root_angvel_i.get(Y_row, 0).item()
+
+        dt = (1 / SAMPLE_RATE)
+        delta_xform = np.eye(4)
+        mu.build_mat_from_quat_pos(delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt)
+        root_xform = np.eye(4)
+        mu.build_mat_from_quat_pos(root_xform, self.skeleton_group.local.rotation, self.skeleton_group.local.position)
+
+        final_xform = root_xform @ delta_xform
+
+        self.skeleton_group.local.position = final_xform[0:3, 3]
+        self.skeleton_group.local.rotation = mu.quat_from_mat(final_xform)
+
+
+        # create a new line mesh for the trajectory
         positions = []
         colors = []
         for i in range(TRAJ_WINDOW_SIZE - 1):
@@ -100,9 +113,9 @@ class VisOutputRenderBuddy(RenderBuddy):
         traj_line = gfx.Line(
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
-
-        self.row_group.add(traj_line)
-        self.scene.add(self.row_group)
+        self.skeleton_group.remove(self.traj_line)
+        self.skeleton_group.add(traj_line)
+        self.traj_line = traj_line
 
     def on_animate(self, dt: float):
         super().on_animate(dt)
@@ -110,7 +123,7 @@ class VisOutputRenderBuddy(RenderBuddy):
             row = self.row + 1
             if row >= self.Y.shape[0]:
                 row = 0
-            self.retain_row(row)
+            self.animate_skeleton(row)
 
     def on_key_down(self, event):
         super().on_key_down(event)

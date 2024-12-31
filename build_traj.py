@@ -6,10 +6,12 @@
 #
 
 import cmath
-import numpy as np
 import os
 import sys
 
+import numpy as np
+
+import math_util as mu
 
 OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
@@ -52,10 +54,15 @@ def build_rootvel(root: np.ndarray) -> np.ndarray:
     rootvel = np.zeros((num_frames, 3))
     for frame in range(num_frames):
         if frame > 0 and frame < num_frames - 1:
-            # calculate vel in root frame.
+            # calculate vel in world frame.
             dist = root[frame + 1, 0:3, 3] - root[frame - 1, 0:3, 3]
-            vel = dist / t
-            rootvel[frame, 0:2] = [vel[0], vel[2]]
+            world_vel = dist / t
+
+            # rotate world_vel back into root frame
+            inv_root_rot = mu.quat_inverse(mu.quat_from_mat(root[frame]))
+            local_vel = mu.quat_rotate(inv_root_rot, world_vel)
+
+            rootvel[frame, 0:2] = [local_vel[0], local_vel[2]]
 
             # calculate angular vel
             v0 = root[frame - 1, :3, :3] @ [1, 0, 0]
@@ -64,7 +71,8 @@ def build_rootvel(root: np.ndarray) -> np.ndarray:
             c0 = complex(v0[0], v0[2])
             c1 = complex(v1[0], v1[2])
             delta_c = c1 * c0.conjugate()
-            angvel = cmath.phase(delta_c) / t
+            # the negative is because cross(x, z) is the negative y axis and we want to rot around the y axis
+            angvel = -cmath.phase(delta_c) / t
             rootvel[frame, 2] = angvel
         else:
             rootvel[frame, 0:3] = [0, 0, 0]
