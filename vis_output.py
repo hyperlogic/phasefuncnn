@@ -85,18 +85,14 @@ class VisOutputRenderBuddy(RenderBuddy):
         # apply root motion!
         root_vel = np.array([y_lens.root_vel_i.get(Y_row, 0)[0], 0, y_lens.root_vel_i.get(Y_row, 0)[1]])
         root_angvel = y_lens.root_angvel_i.get(Y_row, 0).item()
-
         dt = (1 / SAMPLE_RATE)
         delta_xform = np.eye(4)
         mu.build_mat_from_quat_pos(delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt)
         root_xform = np.eye(4)
         mu.build_mat_from_quat_pos(root_xform, self.skeleton_group.local.rotation, self.skeleton_group.local.position)
-
         final_xform = root_xform @ delta_xform
-
         self.skeleton_group.local.position = final_xform[0:3, 3]
         self.skeleton_group.local.rotation = mu.quat_from_mat(final_xform)
-
 
         # create a new line mesh for the trajectory
         positions = []

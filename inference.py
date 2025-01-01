@@ -50,7 +50,7 @@ class VisOutputRenderBuddy(RenderBuddy):
     x_std: torch.Tensor
     x_w: torch.Tensor
     y: torch.Tensor
-    group: gfx.Group
+    skeleton_group: gfx.Group
     camera: gfx.PerspectiveCamera
     canvas: WgpuCanvas
     playing: bool
@@ -103,12 +103,14 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.scene.add(self.group)
 
         self.skeleton_group = gfx.Group()
+        self.traj_line = gfx.Group()
+        self.skeleton_group.add(self.traj_line)
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
         self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
 
-        self.retain_output()
+        self.animate_skeleton()
 
         self.playing = False
         self.t = 0.0
@@ -120,9 +122,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         )
         self.scene.add(self.stick_line)
 
-    def retain_output(self):
-        self.scene.remove(self.group)
-        self.group = gfx.Group()
+    def animate_skeleton(self):
 
         # rotate the bones!
         global_rots = np.array([0, 0, 0, 1]) * np.ones((self.skeleton.num_joints, 4))
@@ -151,10 +151,13 @@ class VisOutputRenderBuddy(RenderBuddy):
         root_vel = np.array([y_lens.root_vel_i.get(self.y, 0)[0], 0, y_lens.root_vel_i.get(self.y, 0)[1]])
         root_angvel = y_lens.root_angvel_i.get(self.y, 0).item()
         dt = (1 / SAMPLE_RATE)
-        root_pos = self.skeleton_group.local.position
-        root_rot = self.skeleton_group.local.rotation
-        self.skeleton_group.local.position = root_pos + mu.quat_rotate(root_rot, root_vel * dt)
-        self.skeleton_group.local.rotation = mu.quat_mul(mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_rot)
+        delta_xform = np.eye(4)
+        mu.build_mat_from_quat_pos(delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt)
+        root_xform = np.eye(4)
+        mu.build_mat_from_quat_pos(root_xform, self.skeleton_group.local.rotation, self.skeleton_group.local.position)
+        final_xform = root_xform @ delta_xform
+        self.skeleton_group.local.position = final_xform[0:3, 3]
+        self.skeleton_group.local.rotation = mu.quat_from_mat(final_xform)
 
         # create lines for the trajectory
         positions = []
@@ -171,9 +174,10 @@ class VisOutputRenderBuddy(RenderBuddy):
         traj_line = gfx.Line(
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
+        self.skeleton_group.remove(self.traj_line)
+        self.skeleton_group.add(traj_line)
+        self.traj_line = traj_line
 
-        self.group.add(traj_line)
-        self.scene.add(self.group)
 
     def on_animate(self, dt: float):
         super().on_animate(dt)
@@ -201,7 +205,7 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.t += dt
             if self.t > (1 / SAMPLE_RATE):
                 self.tick_model()
-                self.retain_output()
+                self.animate_skeleton()
 
     def tick_model(self):
         # self.x = torch.zeros(self.x.shape)
