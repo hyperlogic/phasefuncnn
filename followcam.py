@@ -1,7 +1,9 @@
 import math_util as mu
 import numpy as np
 
-class FollowCam:
+from flycam import FlyCamInterface
+
+class FollowCam(FlyCamInterface):
     """orbit about a moving target"""
 
     world_up: np.ndarray  # vec3
@@ -11,6 +13,7 @@ class FollowCam:
     orbit_speed: float  # radians per second
     rot: np.ndarray  # quat
     pos: np.ndarray  # vec3
+    camera_mat: np.ndarray # 4x4
 
     def __init__(self, world_up: np.ndarray, target: np.ndarray, radius: float, move_speed: float, orbit_speed: float):
         self.world_up = world_up
@@ -24,6 +27,7 @@ class FollowCam:
         self.pos = mu.quat_rotate(self.rot, np.array([0, 0, radius], dtype=np.float32))
 
     def process(self, dt: float, left_stick: np.ndarray, right_stick: np.ndarray, roll_amount: float, up_amount: float):
+        _, _ = up_amount, left_stick
 
         # use roll to zoom in and out.
         if np.fabs(roll_amount) > 0.1:
@@ -51,5 +55,5 @@ class FollowCam:
         self.pos = mu.quat_rotate(rot, np.array([0, 0, self.radius], dtype=np.float32)) + self.target
 
         # make sure that cameraMat will be orthogonal, and aligned with world up.
-        camera_mat = mu.build_look_at_mat(self.pos, self.target, self.world_up)
-        self.rot = mu.quat_from_mat(camera_mat)
+        self.camera_mat = mu.build_look_at_mat(self.pos, self.target, self.world_up)
+        self.rot = mu.quat_from_mat(self.camera_mat)

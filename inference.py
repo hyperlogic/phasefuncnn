@@ -3,18 +3,14 @@ import glob
 import math
 import os
 import pickle
-import sys
-from typing import Tuple, TypedDict
 
 import numpy as np
 import pygfx as gfx
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from wgpu.gui.auto import WgpuCanvas, run
+from wgpu.gui.auto import run
 
 import datalens
-import flycam
 import followcam
 import math_util as mu
 import skeleton_mesh
@@ -52,7 +48,7 @@ class VisOutputRenderBuddy(RenderBuddy):
     y: torch.Tensor
     skeleton_group: gfx.Group
     camera: gfx.PerspectiveCamera
-    canvas: WgpuCanvas
+
     playing: bool
 
     def __init__(
@@ -96,7 +92,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.y = self.model(self.x, self.p).detach()
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
-        axes = gfx.helpers.AxesHelper(3.0, 0.5)
+        axes = gfx.helpers.AxesHelper(3.0, 1)
         self.scene.add(axes)
 
         self.group = gfx.Group()
@@ -107,8 +103,6 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.skeleton_group.add(self.traj_line)
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
-
-        self.camera.show_object(self.scene, up=(0, 1, 0), scale=1.4)
 
         self.animate_skeleton()
 
@@ -150,9 +144,11 @@ class VisOutputRenderBuddy(RenderBuddy):
         # apply root motion!
         root_vel = np.array([y_lens.root_vel_i.get(self.y, 0)[0], 0, y_lens.root_vel_i.get(self.y, 0)[1]])
         root_angvel = y_lens.root_angvel_i.get(self.y, 0).item()
-        dt = (1 / SAMPLE_RATE)
+        dt = 1 / SAMPLE_RATE
         delta_xform = np.eye(4)
-        mu.build_mat_from_quat_pos(delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt)
+        mu.build_mat_from_quat_pos(
+            delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt
+        )
         root_xform = np.eye(4)
         mu.build_mat_from_quat_pos(root_xform, self.skeleton_group.local.rotation, self.skeleton_group.local.position)
         final_xform = root_xform @ delta_xform
@@ -177,7 +173,6 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.skeleton_group.remove(self.traj_line)
         self.skeleton_group.add(traj_line)
         self.traj_line = traj_line
-
 
     def on_animate(self, dt: float):
         super().on_animate(dt)

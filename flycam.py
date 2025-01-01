@@ -1,7 +1,20 @@
+from abc import ABC, abstractmethod
+
 import math_util as mu
 import numpy as np
 
-class FlyCam:
+
+class FlyCamInterface(ABC):
+    pos: np.ndarray
+    rot: np.ndarray
+    camera_mat: np.ndarray
+
+    @abstractmethod
+    def process(self, dt: float, left_stick: np.ndarray, right_stick: np.ndarray, roll_amount: float, up_amount: float):
+        pass
+
+
+class FlyCam(FlyCamInterface):
     """sphere in fluid motion model"""
 
     speed: float  # units per second
@@ -47,7 +60,6 @@ class FlyCam:
             self.world_up = self.camera_mat[:3, 1]
             roll = mu.quat_from_angle_axis(self.rot_speed * dt * roll_amount, forward)
             self.world_up = mu.quat_rotate(roll, self.world_up)
-
 
         # make sure that cameraMat will be orthogonal, and aligned with world up.
         z = mu.quat_rotate(rot, np.array([0, 0, 1], dtype=np.float32))

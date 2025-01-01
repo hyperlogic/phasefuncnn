@@ -1,14 +1,13 @@
 from time import perf_counter
-from typing import Any
 
 import numpy as np
 import pygame
 import pygfx as gfx
-from wgpu.gui.auto import WgpuCanvas, run
+import wgpu
+from wgpu.gui.auto import WgpuCanvas
 
-import flycam
 import math_util as mu
-
+from flycam import FlyCamInterface, FlyCam
 
 KEY_REPEAT_DELAY = 1 / 2
 KEY_REPEAT_RATE = 1 / 20
@@ -18,9 +17,9 @@ class RenderBuddy:
     joystick: pygame.joystick.JoystickType | None
     scene: gfx.Scene
     camera: gfx.PerspectiveCamera
-    canvas: Any
+    canvas: wgpu.gui.WgpuCanvasBase
     renderer: gfx.renderers.WgpuRenderer
-    flycam: flycam.FlyCam
+    flycam: FlyCamInterface
     last_tick_time: float
     left_stick: np.ndarray
     right_stick: np.ndarray
@@ -55,7 +54,7 @@ class RenderBuddy:
 
         MOVE_SPEED = 22.5
         ROT_SPEED = 1.15
-        self.flycam = flycam.FlyCam(
+        self.flycam = FlyCam(
             np.array([0, 1, 0], dtype=np.float32),
             np.array([0.1, 10, 50], dtype=np.float32),
             np.array([0, 0, 0, 1], dtype=np.float32),
@@ -93,7 +92,7 @@ class RenderBuddy:
 
     def on_key_down(self, event: gfx.objects.KeyboardEvent):
         if event.key == "Escape":
-            self.renderer.target.close()
+            self.canvas.close()
         elif event.key == "a":
             self.left_stick[0] -= 1
         elif event.key == "d":
@@ -165,6 +164,7 @@ class RenderBuddy:
             self.pointer_drag_start = mouse_pos
 
     def on_before_render(self, event):
+        _ = event
         now = perf_counter()
         dt = now - self.last_tick_time
         self.last_tick_time = now
@@ -221,6 +221,7 @@ class RenderBuddy:
         self.on_animate(dt)
 
     def on_close(self, event: gfx.Event):
+        _ = event
         pass
 
     def on_dpad_left(self):
@@ -230,4 +231,5 @@ class RenderBuddy:
         pass
 
     def on_animate(self, dt: float):
+        _ = dt
         pass
