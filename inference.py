@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from wgpu.gui.auto import run
 
+from build_traj import TRAJ_SAMPLE_RATE
 import datalens
 import followcam
 import math_util as mu
@@ -20,7 +21,7 @@ from skeleton import Skeleton
 
 OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
-TRAJ_ELEMENT_SIZE = 4
+TRAJ_SAMPLE_RATE = 6
 SAMPLE_RATE = 60
 
 
@@ -31,6 +32,267 @@ def unpickle_obj(filename):
 
 def nograd_tensor(array: list[float]):
     return torch.tensor(array, dtype=torch.float32, requires_grad=False)
+
+
+def build_idle_input(x_lens: datalens.InputLens) -> torch.Tensor:
+    x = torch.zeros(x_lens.num_cols)
+    traj_pos_i = [
+        [0.782, 0.189],
+        [0.847, 0.161],
+        [0.901, 0.128],
+        [0.946, 0.088],
+        [0.977, 0.039],
+        [0.990, -0.022],
+        [0.000, 0.000],
+        [-0.964, 0.232],
+        [-0.935, 0.347],
+        [-0.865, 0.462],
+        [-0.783, 0.484],
+        [-0.634, 0.444],
+    ]
+    traj_dir_i = [
+        [0.980, -0.254],
+        [0.905, -0.240],
+        [0.828, -0.225],
+        [0.754, -0.210],
+        [0.687, -0.195],
+        [0.632, -0.180],
+        [0.000, -0.000],
+        [0.631, 0.145],
+        [0.687, 0.192],
+        [0.754, 0.213],
+        [0.827, 0.186],
+        [0.902, 0.156],
+    ]
+    joint_pos_im1 = [
+        [0.065, 0.104, -0.029],
+        [0.065, 0.104, -0.029],
+        [-0.032, 0.105, -0.104],
+        [-0.115, 0.032, -0.007],
+        [-0.020, -0.093, -0.037],
+        [-0.002, -0.064, -0.039],
+        [0.065, 0.104, -0.029],
+        [0.032, 0.107, 0.104],
+        [-0.081, 0.030, -0.015],
+        [-0.012, -0.089, 0.010],
+        [0.005, -0.060, 0.016],
+        [0.065, 0.104, -0.029],
+        [-0.086, 0.096, 0.006],
+        [-0.105, 0.099, 0.017],
+        [-0.105, 0.099, 0.017],
+        [-0.097, 0.089, 0.009],
+        [-0.105, 0.083, 0.011],
+        [-0.105, 0.099, 0.017],
+        [-0.084, 0.087, 0.040],
+        [-0.079, 0.268, -0.402],
+        [-0.128, 0.266, -0.567],
+        [-0.128, 0.266, -0.567],
+        [-0.139, 0.254, -0.535],
+        [-0.128, 0.266, -0.567],
+        [-0.105, 0.099, 0.017],
+        [-0.089, 0.089, -0.052],
+        [-0.072, 0.264, 0.389],
+        [-0.109, 0.323, 0.544],
+        [-0.109, 0.323, 0.544],
+        [-0.116, 0.313, 0.535],
+        [-0.109, 0.323, 0.544],
+    ]
+    joint_vel_im1 = [
+        [-0.003, -0.002, 0.003],
+        [-0.003, -0.002, 0.003],
+        [-0.010, -0.002, 0.004],
+        [-0.001, -0.002, -0.004],
+        [-0.003, 0.000, -0.002],
+        [-0.003, -0.000, -0.002],
+        [-0.003, -0.002, 0.003],
+        [0.010, -0.002, -0.004],
+        [0.000, -0.002, -0.002],
+        [-0.003, 0.001, -0.003],
+        [-0.002, 0.001, -0.002],
+        [-0.003, -0.002, 0.003],
+        [-0.006, -0.002, 0.005],
+        [-0.002, -0.003, 0.011],
+        [-0.002, -0.003, 0.011],
+        [-0.002, -0.002, 0.012],
+        [0.007, -0.001, 0.011],
+        [-0.002, -0.003, 0.011],
+        [0.008, 0.000, -0.002],
+        [0.007, -0.017, 0.006],
+        [0.009, -0.026, 0.008],
+        [0.009, -0.026, 0.008],
+        [0.009, -0.025, 0.006],
+        [0.009, -0.026, 0.008],
+        [-0.002, -0.003, 0.011],
+        [0.003, -0.003, 0.020],
+        [-0.007, -0.029, 0.001],
+        [0.022, -0.036, -0.012],
+        [0.022, -0.036, -0.012],
+        [0.027, -0.034, -0.012],
+        [0.022, -0.036, -0.012],
+    ]
+    for i, v in enumerate(traj_pos_i):
+        x_lens.traj_pos_i.set(x, i, nograd_tensor(v))
+    for i, v in enumerate(traj_dir_i):
+        x_lens.traj_dir_i.set(x, i, nograd_tensor(v))
+    for i, v in enumerate(joint_pos_im1):
+        x_lens.joint_pos_im1.set(x, i, nograd_tensor(v))
+    for i, v in enumerate(joint_vel_im1):
+        x_lens.joint_vel_im1.set(x, i, nograd_tensor(v))
+    return x
+
+
+def build_idle_output(y_lens: datalens.OutputLens) -> torch.Tensor:
+    y = torch.zeros(y_lens.num_cols)
+    traj_pos_ip1 = [
+        [0.782, 0.189],
+        [0.846, 0.160],
+        [0.900, 0.127],
+        [0.944, 0.086],
+        [0.975, 0.037],
+        [0.985, -0.026],
+        [-0.000, 0.000],
+        [-0.959, 0.242],
+        [-0.926, 0.360],
+        [-0.858, 0.475],
+        [-0.772, 0.485],
+        [-0.617, 0.442],
+    ]
+    traj_dir_ip1 = [
+        [0.980, -0.253],
+        [0.905, -0.239],
+        [0.828, -0.224],
+        [0.754, -0.209],
+        [0.687, -0.194],
+        [0.632, -0.178],
+        [0.000, 0.000],
+        [0.632, 0.147],
+        [0.687, 0.197],
+        [0.754, 0.208],
+        [0.827, 0.184],
+        [0.902, 0.158],
+    ]
+    joint_pos_i = [
+        [0.651, 1.035, -0.288],
+        [0.651, 1.035, -0.288],
+        [-0.328, 1.045, -1.031],
+        [-1.147, 0.314, -0.077],
+        [-0.209, -0.932, -0.369],
+        [-0.022, -0.639, -0.390],
+        [0.651, 1.035, -0.288],
+        [0.328, 1.062, 1.031],
+        [-0.813, 0.295, -0.149],
+        [-0.119, -0.888, 0.093],
+        [0.050, -0.595, 0.155],
+        [0.651, 1.035, -0.288],
+        [-0.860, 0.962, 0.065],
+        [-1.047, 0.984, 0.178],
+        [-1.047, 0.984, 0.178],
+        [-0.970, 0.885, 0.099],
+        [-1.048, 0.833, 0.113],
+        [-1.047, 0.984, 0.178],
+        [-0.840, 0.872, 0.397],
+        [-0.782, 2.668, -4.017],
+        [-1.271, 2.640, -5.675],
+        [-1.271, 2.640, -5.675],
+        [-1.384, 2.516, -5.357],
+        [-1.271, 2.640, -5.675],
+        [-1.047, 0.984, 0.178],
+        [-0.885, 0.891, -0.503],
+        [-0.728, 2.619, 3.883],
+        [-1.068, 3.203, 5.432],
+        [-1.068, 3.203, 5.432],
+        [-1.133, 3.096, 5.347],
+        [-1.068, 3.203, 5.432],
+    ]
+    joint_vel_i = [
+        [-0.029, -0.020, 0.010],
+        [-0.029, -0.020, 0.010],
+        [-0.070, -0.021, 0.046],
+        [-0.026, -0.018, -0.036],
+        [-0.034, -0.002, -0.034],
+        [-0.028, 0.001, -0.025],
+        [-0.029, -0.020, 0.010],
+        [0.070, -0.022, -0.046],
+        [0.005, -0.019, -0.019],
+        [-0.031, 0.011, -0.038],
+        [-0.027, 0.010, -0.027],
+        [-0.029, -0.020, 0.010],
+        [-0.052, -0.017, 0.030],
+        [-0.055, -0.018, 0.106],
+        [-0.055, -0.018, 0.106],
+        [-0.050, -0.019, 0.122],
+        [0.054, -0.004, 0.099],
+        [-0.055, -0.018, 0.106],
+        [0.068, 0.006, -0.035],
+        [0.116, -0.218, 0.063],
+        [0.115, -0.334, 0.085],
+        [0.115, -0.334, 0.085],
+        [0.113, -0.323, 0.072],
+        [0.115, -0.334, 0.085],
+        [-0.055, -0.018, 0.106],
+        [0.027, -0.030, 0.232],
+        [-0.081, -0.366, -0.004],
+        [0.256, -0.448, -0.157],
+        [0.256, -0.448, -0.157],
+        [0.311, -0.430, -0.157],
+        [0.256, -0.448, -0.157],
+    ]
+    joint_rot_i = [
+        [-0.075, -0.347, 0.010],
+        [0.971, -0.763, -0.714],
+        [1.022, 0.031, -0.811],
+        [-0.488, -0.255, 0.873],
+        [-0.937, 0.507, 0.632],
+        [-0.864, 0.230, 0.563],
+        [-0.181, 0.400, -0.545],
+        [0.771, -0.330, -0.692],
+        [-0.649, 0.274, 0.590],
+        [-0.371, 0.114, 0.214],
+        [-0.578, 0.203, 0.395],
+        [-0.574, 0.228, 0.683],
+        [-0.935, 0.460, 1.003],
+        [-0.530, 0.067, 0.440],
+        [-0.721, -0.132, 0.726],
+        [-0.907, -0.051, 1.236],
+        [-1.133, -0.139, 1.556],
+        [-0.750, 0.376, 1.497],
+        [0.434, 0.721, 0.341],
+        [2.611, 2.197, 0.998],
+        [2.100, 2.410, 0.447],
+        [1.703, 2.255, 0.400],
+        [1.703, 2.255, 0.400],
+        [2.100, 2.410, 0.447],
+        [-0.692, 0.057, 0.033],
+        [-5.218, 0.362, -1.023],
+        [-2.411, -1.065, -2.593],
+        [-0.554, -0.864, -1.661],
+        [-0.660, -0.995, -1.453],
+        [-0.660, -0.995, -1.453],
+        [-0.554, -0.864, -1.661],
+    ]
+    root_vel_i = [[-0.931, 0.105]]
+    root_angvel_i = [[-0.166]]
+    phase_vel_i = [[1.269]]
+    contacts_i = [[0.926, 0.963, 0.816, 0.845]]
+    for i, v in enumerate(traj_pos_ip1):
+        y_lens.traj_pos_ip1.set(y, i, nograd_tensor(v))
+    for i, v, in enumerate(traj_dir_ip1):
+        y_lens.traj_dir_ip1.set(y, i, nograd_tensor(v))
+    for i, v, in enumerate(joint_pos_i):
+        y_lens.joint_pos_i.set(y, i, nograd_tensor(v))
+    for i, v, in enumerate(joint_vel_i):
+        y_lens.joint_vel_i.set(y, i, nograd_tensor(v))
+    for i, v, in enumerate(joint_rot_i):
+        y_lens.joint_rot_i.set(y, i, nograd_tensor(v))
+    for i, v, in enumerate(root_vel_i):
+        y_lens.root_vel_i.set(y, i, nograd_tensor(v))
+    for i, v, in enumerate(root_angvel_i):
+        y_lens.root_angvel_i.set(y, i, nograd_tensor(v))
+    for i, v, in enumerate(phase_vel_i):
+        y_lens.phase_vel_i.set(y, i, nograd_tensor(v))
+    for i, v, in enumerate(contacts_i):
+        y_lens.contacts_i.set(y, i, nograd_tensor(v))
+    return y
 
 
 class VisOutputRenderBuddy(RenderBuddy):
@@ -47,9 +309,11 @@ class VisOutputRenderBuddy(RenderBuddy):
     x_w: torch.Tensor
     y: torch.Tensor
     skeleton_group: gfx.Group
-    camera: gfx.PerspectiveCamera
-
     playing: bool
+    tick_once: bool
+    t: float
+    y_history: torch.Tensor
+    y_cursor: int
 
     def __init__(
         self,
@@ -57,8 +321,6 @@ class VisOutputRenderBuddy(RenderBuddy):
         x_lens: datalens.InputLens,
         y_lens: datalens.OutputLens,
         model: nn.Module,
-        x: torch.Tensor,
-        p: float,
         y_mean: torch.Tensor,
         y_std: torch.Tensor,
         x_mean: torch.Tensor,
@@ -80,17 +342,21 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.x_lens = x_lens
         self.y_lens = y_lens
         self.model = model
-        self.x = x.clone()
-        self.p = p
         self.y_mean = y_mean
         self.y_std = y_std
         self.x_mean = x_mean
         self.x_std = x_std
         self.x_w = x_w
 
-        # run inference
-        self.y = self.model(self.x, self.p).detach()
+        # setup initial state
+        self.x = build_idle_input(self.x_lens)
+        self.p = nograd_tensor(0.0)
+        self.y = build_idle_output(self.y_lens)
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
+
+        # init history
+        self.y_history = self.y.unsqueeze(0).repeat(SAMPLE_RATE, 1)
+        self.y_cursor = 0
 
         axes = gfx.helpers.AxesHelper(3.0, 1)
         self.scene.add(axes)
@@ -107,6 +373,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.animate_skeleton()
 
         self.playing = False
+        self.tick_once = False
         self.t = 0.0
 
         # used to render joystick dir in world space
@@ -196,13 +463,32 @@ class VisOutputRenderBuddy(RenderBuddy):
         )
         self.scene.add(self.stick_line)
 
-        if self.playing:
+        if self.playing or self.tick_once:
             self.t += dt
             if self.t > (1 / SAMPLE_RATE):
+                self.build_input()
                 self.tick_model()
                 self.animate_skeleton()
+            self.tick_once = False
 
-    def tick_model(self):
+    def build_input(self):
+        # TODO:
+        #self.x = build_idle_input(self.x_lens)
+        self.x = torch.zeros(x_lens.num_cols)
+
+        # initialize past traj from history.
+        HISTORY_STEP = SAMPLE_RATE // TRAJ_SAMPLE_RATE
+        for i in range(TRAJ_WINDOW_SIZE // 2):
+            cursor = (self.y_cursor - (i + 1) * HISTORY_STEP) % self.y_history.shape[0]
+            traj_pos_im1 = self.y_history[cursor]
+            self.x_lens.traj_pos_i.set(self.x, i, traj_pos_im1)
+
+        # initialize future history from joystick
+        for i in range(TRAJ_WINDOW_SIZE // 2, TRAJ_WINDOW_SIZE):
+            traj_pos_im1 = nograd_tensor([0, 0])
+            self.x_lens.traj_pos_i.set(self.x, i, traj_pos_im1)
+
+        """
         # self.x = torch.zeros(self.x.shape)
         self.x = x_lens.unnormalize(self.x, self.x_mean, self.x_std, self.x_w)
 
@@ -230,7 +516,11 @@ class VisOutputRenderBuddy(RenderBuddy):
             joint_vel = y_lens.joint_vel_i.get(self.y, i)
             x_lens.joint_pos_im1.set(self.x, i, joint_pos)
             x_lens.joint_vel_im1.set(self.x, i, joint_vel)
+        """
 
+    def tick_model(self):
+
+        # integrate phase
         phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
         MIN_PHASE_VEL = 0.5
         MAX_PHASE_VEL = 100.0
@@ -240,12 +530,12 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         print(f"phase = {self.p}, phase_vel = {phase_vel}")
 
-        # print("x1 =")
-        # x_lens.print(self.x)
-
-        self.x = x_lens.normalize(self.x, self.x_mean, self.x_std, self.x_w)
         self.y = self.model(self.x, self.p).detach()
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
+
+        # record traj history.
+        self.y_cursor = (self.y_cursor + 1) % SAMPLE_RATE
+        self.y_history[self.y_cursor] = self.y
 
     def on_key_down(self, event):
         super().on_key_down(event)
@@ -254,11 +544,10 @@ class VisOutputRenderBuddy(RenderBuddy):
 
     def on_dpad_left(self):
         super().on_dpad_left()
-        print("DPAD LEFT!")
 
     def on_dpad_right(self):
         super().on_dpad_right()
-        print("DPAD RIGHT!")
+        self.tick_once = True
 
 
 if __name__ == "__main__":
@@ -290,35 +579,15 @@ if __name__ == "__main__":
     model.load_state_dict(state_dict)
 
     # load input, and phase
-    X = torch.load(os.path.join(OUTPUT_DIR, "X.pth"), weights_only=True)
     X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True)
     X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
     X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
-    print(f"X.shape = {X.shape}")
 
     # load output
-    Y = torch.load(os.path.join(OUTPUT_DIR, "Y.pth"), weights_only=True)
     Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
 
-    # load phase
-    P = torch.load(os.path.join(OUTPUT_DIR, "P.pth"), weights_only=True)
-    print(f"P.shape = {P.shape}")
-
-    def make_batch(t: torch.Tensor, start: int, batch_size: int) -> torch.Tensor:
-        return t[start : start + batch_size]
-
-    ii = torch.randint(0, X.shape[0], (1,)).item()
-    output = model(X[ii], P[ii])
-
-    criterion = nn.MSELoss()
-    L1_LAMBDA = 0.01
-    l1_reg = sum(param.abs().sum() for param in model.parameters())
-    loss = criterion(output, Y[ii]) + L1_LAMBDA * l1_reg
-
-    print(f"loss = {loss}")
-    print(f"output =")
-    y_lens.print(output)
-
-    render_buddy = VisOutputRenderBuddy(skeleton, x_lens, y_lens, model, X[2], P[2], Y_mean, Y_std, X_mean, X_std, X_w)
+    render_buddy = VisOutputRenderBuddy(
+        skeleton, x_lens, y_lens, model, Y_mean, Y_std, X_mean, X_std, X_w
+    )
     run()
