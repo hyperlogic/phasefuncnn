@@ -314,6 +314,8 @@ class VisOutputRenderBuddy(RenderBuddy):
     t: float
     y_history: torch.Tensor
     y_cursor: int
+    draw_output_trajectory: bool
+    draw_input_trajectory: bool
 
     def __init__(
         self,
@@ -334,9 +336,11 @@ class VisOutputRenderBuddy(RenderBuddy):
         MOVE_SPEED = 22.5
         RADIUS = 50
         target_y = 15
+        """
         self.flycam = followcam.FollowCam(
             np.array([0, 1, 0]), np.array([0, target_y, 0]), RADIUS, MOVE_SPEED, ORBIT_SPEED
         )
+        """
 
         self.skeleton = skeleton
         self.x_lens = x_lens
@@ -370,6 +374,9 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
+        self.draw_output_trajectory = False
+        self.draw_input_trajectory = True
+
         self.animate_skeleton()
 
         self.playing = False
@@ -382,6 +389,7 @@ class VisOutputRenderBuddy(RenderBuddy):
             gfx.LineSegmentMaterial(thickness=2, color_mode="vertex"),
         )
         self.scene.add(self.stick_line)
+
 
     def animate_skeleton(self):
 
@@ -422,24 +430,63 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.skeleton_group.local.position = final_xform[0:3, 3]
         self.skeleton_group.local.rotation = mu.quat_from_mat(final_xform)
 
-        # create lines for the trajectory
-        positions = []
-        colors = []
-        for i in range(TRAJ_WINDOW_SIZE - 1):
-            p0 = y_lens.traj_pos_ip1.get(self.y, i)
-            p1 = y_lens.traj_pos_ip1.get(self.y, i + 1)
-            positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
-            if i % 2 == 0:
-                colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
-            else:
-                colors += [[1, 0, 0, 1], [1, 0, 0, 1]]
+        if self.draw_output_trajectory:
+            # create lines for the trajectory
+            positions = []
+            colors = []
+            for i in range(TRAJ_WINDOW_SIZE - 1):
+                p0 = y_lens.traj_pos_ip1.get(self.y, i)
+                p1 = y_lens.traj_pos_ip1.get(self.y, i + 1)
+                positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
+                if i % 2 == 0:
+                    colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
+                else:
+                    colors += [[1, 0, 0, 1], [1, 0, 0, 1]]
 
-        traj_line = gfx.Line(
-            gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
-        )
-        self.skeleton_group.remove(self.traj_line)
-        self.skeleton_group.add(traj_line)
-        self.traj_line = traj_line
+            # draw the directions in green
+            for i in range(TRAJ_WINDOW_SIZE):
+                p0 = y_lens.traj_pos_ip1.get(self.y, i)
+                p1 = p0 + y_lens.traj_dir_ip1.get(self.y, i)
+                positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
+                colors += [[0, 1, 0, 1], [0, 1, 0, 1]]
+
+            traj_line = gfx.Line(
+                gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+            )
+            self.skeleton_group.remove(self.traj_line)
+            self.skeleton_group.add(traj_line)
+            self.traj_line = traj_line
+
+        if self.draw_input_trajectory:
+
+            # unnormalize x so we can draw it.
+            x = x_lens.unnormalize(self.x, self.x_mean, self.x_std, self.x_w)
+
+            # create lines for the trajectory
+            positions = []
+            colors = []
+            for i in range(TRAJ_WINDOW_SIZE - 1):
+                p0 = x_lens.traj_pos_i.get(x, i)
+                p1 = x_lens.traj_pos_i.get(x, i + 1)
+                positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
+                if i % 2 == 0:
+                    colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
+                else:
+                    colors += [[0.5, 0.5, 1, 1], [0.5, 0.5, 1, 1]]
+
+            # draw the directions in green
+            for i in range(TRAJ_WINDOW_SIZE):
+                p0 = x_lens.traj_pos_i.get(x, i)
+                p1 = p0 + x_lens.traj_dir_i.get(x, i)
+                positions += [[p0[0], 0.05, p0[1]], [p1[0], 0.05, p1[1]]]
+                colors += [[0, 1, 0, 1], [0, 1, 0, 1]]
+
+            traj_line = gfx.Line(
+                gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+            )
+            self.skeleton_group.remove(self.traj_line)
+            self.skeleton_group.add(traj_line)
+            self.traj_line = traj_line
 
     def on_animate(self, dt: float):
         super().on_animate(dt)
@@ -466,27 +513,69 @@ class VisOutputRenderBuddy(RenderBuddy):
         if self.playing or self.tick_once:
             self.t += dt
             if self.t > (1 / SAMPLE_RATE):
-                self.build_input()
+                self.x = self.build_input()
                 self.tick_model()
                 self.animate_skeleton()
             self.tick_once = False
 
-    def build_input(self):
-        # TODO:
-        #self.x = build_idle_input(self.x_lens)
-        self.x = torch.zeros(x_lens.num_cols)
+    def build_input(self) -> torch.Tensor:
+        x = torch.zeros(x_lens.num_cols)
+        x = x_lens.unnormalize(x, self.x_mean, self.x_std, self.x_w)
 
-        # initialize past traj from history.
-        HISTORY_STEP = SAMPLE_RATE // TRAJ_SAMPLE_RATE
+        """
+        for i in range(TRAJ_WINDOW_SIZE):
+            traj_pos = nograd_tensor([0, 0])
+            traj_dir = nograd_tensor([0, 0])
+            self.x_lens.traj_pos_i.set(x, i, traj_pos)
+            self.x_lens.traj_dir_i.set(x, i, traj_dir)
+        """
+
+        # initialize history part of traj as zero! FOR NOW
         for i in range(TRAJ_WINDOW_SIZE // 2):
-            cursor = (self.y_cursor - (i + 1) * HISTORY_STEP) % self.y_history.shape[0]
-            traj_pos_im1 = self.y_history[cursor]
-            self.x_lens.traj_pos_i.set(self.x, i, traj_pos_im1)
+            traj_pos = nograd_tensor([0, 0])
+            traj_dir = nograd_tensor([1, 0])
+            self.x_lens.traj_pos_i.set(x, i, traj_pos)
+            self.x_lens.traj_dir_i.set(x, i, traj_dir)
 
-        # initialize future history from joystick
+        MOVE_SPEED = 22.5
+        ROT_SPEED = 1.15
+        dir_0 = nograd_tensor([0, 1])
+        dir_0 = dir_0 / torch.linalg.norm(dir_0)
+        dir_1 = nograd_tensor([-1, 0])
+        dir_1 = dir_1 / torch.linalg.norm(dir_1)
+
+        # initialize future part of traj from joystick
         for i in range(TRAJ_WINDOW_SIZE // 2, TRAJ_WINDOW_SIZE):
-            traj_pos_im1 = nograd_tensor([0, 0])
-            self.x_lens.traj_pos_i.set(self.x, i, traj_pos_im1)
+            t = (i - TRAJ_WINDOW_SIZE // 2) * (1 / TRAJ_SAMPLE_RATE)
+            theta = torch.acos(torch.dot(dir_0, dir_1))
+            if t < (theta / ROT_SPEED):
+
+                # dir(t) = e^(wti) * d0
+                e_wt = cmath.exp(complex(0, ROT_SPEED * t))
+                d0 = complex(dir_0[0], dir_0[1])
+                d = e_wt * d0
+
+                traj_dir = nograd_tensor([d.real, d.imag])
+
+                # pos(t) = ∫e^(wti) * d0 dt
+                # pos = d0 / wi * e^(wti)
+                k = d0 / complex(0, ROT_SPEED)
+                p = k * e_wt
+
+                traj_pos = nograd_tensor([d.real, d.imag])
+
+            else:
+                traj_dir = nograd_tensor([dir_1[0], dir_1[1]])
+
+                e_wt = cmath.exp(complex(0, theta))
+                k = d0 / complex(0, ROT_SPEED)
+                p = k * e_wt
+                traj_pos = p
+
+            #traj_pos = nograd_tensor([0, 0])
+            self.x_lens.traj_pos_i.set(x, i, traj_pos)
+            self.x_lens.traj_dir_i.set(x, i, traj_dir)
+
 
         """
         # self.x = torch.zeros(self.x.shape)
@@ -518,6 +607,11 @@ class VisOutputRenderBuddy(RenderBuddy):
             x_lens.joint_vel_im1.set(self.x, i, joint_vel)
         """
 
+        x = x_lens.normalize(x, self.x_mean, self.x_std, self.x_w)
+        return x
+
+
+
     def tick_model(self):
 
         # integrate phase
@@ -530,8 +624,11 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         print(f"phase = {self.p}, phase_vel = {phase_vel}")
 
-        self.y = self.model(self.x, self.p).detach()
-        self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
+        ##
+        # AJT: TODO HACK REMOVE, dont evaluate model at all
+        ##
+        #self.y = self.model(self.x, self.p).detach()
+        #self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
         # record traj history.
         self.y_cursor = (self.y_cursor + 1) % SAMPLE_RATE
