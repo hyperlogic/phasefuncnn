@@ -12,6 +12,12 @@ def normalize(v: np.ndarray) -> np.ndarray:
     else:
         return np.array([1, 0, 0])
 
+def limit(v: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(v)
+    if norm > 1.0:
+        return v / norm
+    else:
+        return v
 
 def deadspot(val: float) -> float:
     if np.abs(val) > DEADSPOT_THRESH:

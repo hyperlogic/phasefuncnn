@@ -5,6 +5,7 @@ import os
 import pickle
 
 import numpy as np
+from flycam import FlyCamInterface
 import pygfx as gfx
 import torch
 import torch.nn as nn
@@ -23,6 +24,56 @@ OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_SAMPLE_RATE = 6
 SAMPLE_RATE = 60
+
+class CharacterMovement(FlyCamInterface):
+    speed: float  # units per second
+    rot_speed: float  # radians per second
+    worldUp: np.ndarray  # vec3
+    pos: np.ndarray  # vec3
+    vel: np.ndarray  # vec3
+    rot: np.ndarray  # quat xyzw
+    camera_mat: np.ndarray  # 4x4
+
+    def __init__(self, world_up: np.ndarray, pos: np.ndarray, rot: np.ndarray, speed: float, rot_speed: float):
+        self.world_up = world_up
+        self.pos = pos
+        self.rot = rot
+        self.vel = np.array([0, 0, 0], dtype=np.float32)
+        self.speed = speed
+        self.rot_speed = rot_speed
+        self.camera_mat = mu.build_mat_from_quat(np.eye(4), self.rot)
+        self.camera_mat[:3, 3] = self.pos
+
+    def process(self, dt: float, left_stick: np.ndarray, right_stick: np.ndarray, roll_amount: float, up_amount: float):
+        STIFF = 50.0
+        K = STIFF / self.speed
+
+        # left_stick controls position, in world space!
+        stick = mu.limit(np.array([left_stick[0], 0, left_stick[1]]))
+        s_over_k = (stick * STIFF) / K
+        s_over_k_sq = (stick * STIFF) / (K * K)
+        e_neg_kt = np.exp(-K * dt)
+        v = s_over_k + e_neg_kt * (self.vel - s_over_k)
+        self.pos = s_over_k * dt + (s_over_k_sq - self.vel / K) * e_neg_kt + self.pos - s_over_k_sq + (self.vel / K)
+        self.vel = v
+
+        # left_stick also determines direction.  rotate towards left_stick diration
+        forward = mu.quat_rotate(self.rot, np.array([0, 0, -1], dtype=np.float32))
+        right = mu.quat_rotate(self.rot, np.array([1, 0, 0], dtype=np.float32))
+
+        stick_norm = np.linalg.norm(stick)
+        if stick_norm > 0:
+            theta = np.arccos(min(1, np.dot(forward, stick)))
+            if theta / self.rot_speed < dt:
+                forward = stick
+            else:
+                sign = -np.sign(min(1, np.dot(stick, right)))
+                yaw = mu.quat_from_angle_axis(self.rot_speed * dt * theta * sign, self.world_up)
+                forward = mu.quat_rotate(yaw, forward)
+
+        # make sure that cameraMat will be orthogonal, and aligned with world up.
+        self.camera_mat = mu.orthogonalize_camera_mat(-forward, self.world_up, self.pos)
+        self.rot = mu.quat_from_mat(self.camera_mat)
 
 
 def unpickle_obj(filename):
@@ -336,11 +387,10 @@ class VisOutputRenderBuddy(RenderBuddy):
         MOVE_SPEED = 22.5
         RADIUS = 50
         target_y = 15
-        """
+
         self.flycam = followcam.FollowCam(
             np.array([0, 1, 0]), np.array([0, target_y, 0]), RADIUS, MOVE_SPEED, ORBIT_SPEED
         )
-        """
 
         self.skeleton = skeleton
         self.x_lens = x_lens
@@ -519,16 +569,10 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.tick_once = False
 
     def build_input(self) -> torch.Tensor:
+        # NOTE: self.y is already unnormalized
+
         x = torch.zeros(x_lens.num_cols)
         x = x_lens.unnormalize(x, self.x_mean, self.x_std, self.x_w)
-
-        """
-        for i in range(TRAJ_WINDOW_SIZE):
-            traj_pos = nograd_tensor([0, 0])
-            traj_dir = nograd_tensor([0, 0])
-            self.x_lens.traj_pos_i.set(x, i, traj_pos)
-            self.x_lens.traj_dir_i.set(x, i, traj_dir)
-        """
 
         # initialize history part of traj as zero! FOR NOW
         for i in range(TRAJ_WINDOW_SIZE // 2):
@@ -538,43 +582,42 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.x_lens.traj_dir_i.set(x, i, traj_dir)
 
         MOVE_SPEED = 22.5
-        ROT_SPEED = 1.15
-        dir_0 = nograd_tensor([0, 1])
-        dir_0 = dir_0 / torch.linalg.norm(dir_0)
-        dir_1 = nograd_tensor([-1, 0])
-        dir_1 = dir_1 / torch.linalg.norm(dir_1)
+        ROT_SPEED = 3.15
+        up = np.array([0, 1, 0])
+        init_rot = mu.quat_from_angle_axis(-np.pi / 2, up)
+        mover = CharacterMovement(up, np.array([0, 0, 0]), init_rot, MOVE_SPEED, ROT_SPEED)
+        mover.vel = np.array([10.0, 0, 0], dtype=np.float32)
+
+        joystick_left_stick = np.array([0, 0], dtype=np.float32)
+        if self.joystick:
+            joystick_left_stick[0] = mu.deadspot(self.joystick.get_axis(0))
+            joystick_left_stick[1] = -mu.deadspot(self.joystick.get_axis(1))
+        left_stick = left_stick = np.clip(self.left_stick + joystick_left_stick, -1, 1)
+
+        # project the stick onto the ground plane, such that up on the stick points towards the camera forward direction.
+        cam_forward = mu.quat_rotate(self.flycam.rot, np.array([0, 0, -1]))
+        theta = math.atan2(cam_forward[2], cam_forward[0])
+        c_stick = cmath.rect(1.0, theta) * complex(left_stick[1], left_stick[0])
+        world_stick = np.array([c_stick.real, 0, c_stick.imag])
+
+        stick = np.array([world_stick[0], world_stick[2]])
+        #stick = stick / np.linalg.norm(stick)
 
         # initialize future part of traj from joystick
         for i in range(TRAJ_WINDOW_SIZE // 2, TRAJ_WINDOW_SIZE):
-            t = (i - TRAJ_WINDOW_SIZE // 2) * (1 / TRAJ_SAMPLE_RATE)
-            theta = torch.acos(torch.dot(dir_0, dir_1))
-            if t < (theta / ROT_SPEED):
 
-                # dir(t) = e^(wti) * d0
-                e_wt = cmath.exp(complex(0, ROT_SPEED * t))
-                d0 = complex(dir_0[0], dir_0[1])
-                d = e_wt * d0
+            pos = mover.pos
+            dir = mu.quat_rotate(mover.rot, np.array([0, 0, -1]))
 
-                traj_dir = nograd_tensor([d.real, d.imag])
+            traj_pos = nograd_tensor([pos[0], pos[2]])
+            traj_dir = nograd_tensor([dir[0], dir[2]])
 
-                # pos(t) = ∫e^(wti) * d0 dt
-                # pos = d0 / wi * e^(wti)
-                k = d0 / complex(0, ROT_SPEED)
-                p = k * e_wt
-
-                traj_pos = nograd_tensor([d.real, d.imag])
-
-            else:
-                traj_dir = nograd_tensor([dir_1[0], dir_1[1]])
-
-                e_wt = cmath.exp(complex(0, theta))
-                k = d0 / complex(0, ROT_SPEED)
-                p = k * e_wt
-                traj_pos = p
-
-            #traj_pos = nograd_tensor([0, 0])
             self.x_lens.traj_pos_i.set(x, i, traj_pos)
             self.x_lens.traj_dir_i.set(x, i, traj_dir)
+
+            NUM_SUBSTEPS = 10
+            for i in range(NUM_SUBSTEPS):
+                mover.process(1 / (NUM_SUBSTEPS * TRAJ_SAMPLE_RATE), stick, np.array([0, 0]), 0, 0)
 
 
         """
@@ -624,9 +667,6 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         print(f"phase = {self.p}, phase_vel = {phase_vel}")
 
-        ##
-        # AJT: TODO HACK REMOVE, dont evaluate model at all
-        ##
         #self.y = self.model(self.x, self.p).detach()
         #self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
