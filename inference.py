@@ -363,10 +363,11 @@ class VisOutputRenderBuddy(RenderBuddy):
     playing: bool
     tick_once: bool
     t: float
-    y_history: torch.Tensor
-    y_cursor: int
+    history_xforms: torch.Tensor
+    history_cursor: int
     draw_output_trajectory: bool
     draw_input_trajectory: bool
+    root_xform: np.ndarray
 
     def __init__(
         self,
@@ -408,9 +409,10 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.y = build_idle_output(self.y_lens)
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
-        # init history
-        self.y_history = self.y.unsqueeze(0).repeat(SAMPLE_RATE, 1)
-        self.y_cursor = 0
+        # one second of history
+        self.history_xforms = np.tile(np.eye(4), (SAMPLE_RATE, 1, 1))
+        self.history_cursor = 0
+        self.root_xform = np.eye(4)
 
         axes = gfx.helpers.AxesHelper(3.0, 1)
         self.scene.add(axes)
@@ -474,11 +476,9 @@ class VisOutputRenderBuddy(RenderBuddy):
         mu.build_mat_from_quat_pos(
             delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt
         )
-        root_xform = np.eye(4)
-        mu.build_mat_from_quat_pos(root_xform, self.skeleton_group.local.rotation, self.skeleton_group.local.position)
-        final_xform = root_xform @ delta_xform
-        self.skeleton_group.local.position = final_xform[0:3, 3]
-        self.skeleton_group.local.rotation = mu.quat_from_mat(final_xform)
+        self.root_xform = self.root_xform @ delta_xform
+        self.skeleton_group.local.position = self.root_xform[0:3, 3]
+        self.skeleton_group.local.rotation = mu.quat_from_mat(self.root_xform)
 
         if self.draw_output_trajectory:
             # create lines for the trajectory
@@ -538,6 +538,11 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.skeleton_group.add(traj_line)
             self.traj_line = traj_line
 
+        # record traj history.
+        self.history_cursor = (self.history_cursor + 1) % SAMPLE_RATE
+        self.history_xforms[self.history_cursor] = self.root_xform
+
+
     def on_animate(self, dt: float):
         super().on_animate(dt)
 
@@ -570,23 +575,39 @@ class VisOutputRenderBuddy(RenderBuddy):
 
     def build_input(self) -> torch.Tensor:
         # NOTE: self.y is already unnormalized
+        root_vel = np.array([y_lens.root_vel_i.get(self.y, 0)[0], 0, y_lens.root_vel_i.get(self.y, 0)[1]])
 
         x = torch.zeros(x_lens.num_cols)
         x = x_lens.unnormalize(x, self.x_mean, self.x_std, self.x_w)
 
-        # initialize history part of traj as zero! FOR NOW
+        # initialize past part of traj from history_xforms
+        inv_root_xform = np.linalg.inv(self.root_xform)
+        history_step = SAMPLE_RATE // TRAJ_SAMPLE_RATE
+        N = TRAJ_WINDOW_SIZE // 2
+        for i in range(N):
+            cursor = (self.history_cursor - (history_step * (i + 1))) % SAMPLE_RATE
+
+            traj_index = N + 1
+
+            # rotate xform into root space
+            xform = inv_root_xform @ self.history_xforms[cursor]
+            traj_pos = xform[:3, 3]
+            traj_dir = mu.quat_rotate(mu.quat_from_mat(xform), np.array([0, 0, -1]))
+
+            self.x_lens.traj_pos_i.set(x, N - i, nograd_tensor([traj_pos[0], traj_pos[2]]))
+            self.x_lens.traj_dir_i.set(x, N - i, nograd_tensor([traj_dir[0], traj_dir[2]]))
+
         for i in range(TRAJ_WINDOW_SIZE // 2):
-            traj_pos = nograd_tensor([0, 0])
-            traj_dir = nograd_tensor([1, 0])
-            self.x_lens.traj_pos_i.set(x, i, traj_pos)
-            self.x_lens.traj_dir_i.set(x, i, traj_dir)
+            traj_pos = self.x_lens.traj_pos_i.get(x, i)
+            traj_dir = self.x_lens.traj_dir_i.get(x, i)
+            print(f"traj[{i}] = pos = {traj_pos}, dir = {traj_dir}")
 
         MOVE_SPEED = 22.5
         ROT_SPEED = 3.15
         up = np.array([0, 1, 0])
         init_rot = mu.quat_from_angle_axis(-np.pi / 2, up)
         mover = CharacterMovement(up, np.array([0, 0, 0]), init_rot, MOVE_SPEED, ROT_SPEED)
-        mover.vel = np.array([10.0, 0, 0], dtype=np.float32)
+        mover.vel = root_vel
 
         joystick_left_stick = np.array([0, 0], dtype=np.float32)
         if self.joystick:
@@ -601,7 +622,6 @@ class VisOutputRenderBuddy(RenderBuddy):
         world_stick = np.array([c_stick.real, 0, c_stick.imag])
 
         stick = np.array([world_stick[0], world_stick[2]])
-        #stick = stick / np.linalg.norm(stick)
 
         # initialize future part of traj from joystick
         for i in range(TRAJ_WINDOW_SIZE // 2, TRAJ_WINDOW_SIZE):
@@ -619,28 +639,7 @@ class VisOutputRenderBuddy(RenderBuddy):
             for i in range(NUM_SUBSTEPS):
                 mover.process(1 / (NUM_SUBSTEPS * TRAJ_SAMPLE_RATE), stick, np.array([0, 0]), 0, 0)
 
-
-        """
-        # self.x = torch.zeros(self.x.shape)
-        self.x = x_lens.unnormalize(self.x, self.x_mean, self.x_std, self.x_w)
-
-        # print("x0 =")
-        # x_lens.print(self.x)
-
-        t = torch.linspace(0, 1, 2 * (TRAJ_WINDOW_SIZE // 2) + 1).unsqueeze(1)
-
-        start = nograd_tensor([-50.0, 0.0])
-        end = nograd_tensor([50.0, 0.0])
-        traj_positions = (1 - t) * start + t * end
-
-        for i in range(TRAJ_WINDOW_SIZE):
-            # traj_pos = y_lens.traj_pos_ip1.get(self.y, i)
-            # traj_dir = y_lens.traj_pos_ip1.get(self.y, i)
-
-            traj_pos = traj_positions[i]
-            traj_dir = torch.tensor([1.0, 0.0], dtype=torch.float32, requires_grad=False)
-            x_lens.traj_pos_i.set(self.x, i, traj_pos)
-            x_lens.traj_dir_i.set(self.x, i, traj_dir)
+        # TODO: blend between output trajectory and desired trajectory
 
         for i in range(self.skeleton.num_joints):
             # copy joints over from output to next input.
@@ -648,7 +647,6 @@ class VisOutputRenderBuddy(RenderBuddy):
             joint_vel = y_lens.joint_vel_i.get(self.y, i)
             x_lens.joint_pos_im1.set(self.x, i, joint_pos)
             x_lens.joint_vel_im1.set(self.x, i, joint_vel)
-        """
 
         x = x_lens.normalize(x, self.x_mean, self.x_std, self.x_w)
         return x
@@ -667,12 +665,8 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         print(f"phase = {self.p}, phase_vel = {phase_vel}")
 
-        #self.y = self.model(self.x, self.p).detach()
-        #self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
-
-        # record traj history.
-        self.y_cursor = (self.y_cursor + 1) % SAMPLE_RATE
-        self.y_history[self.y_cursor] = self.y
+        self.y = self.model(self.x, self.p).detach()
+        self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
     def on_key_down(self, event):
         super().on_key_down(event)
