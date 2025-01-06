@@ -78,17 +78,17 @@ phase_i-1 - 1 float
 
 shape = (num_rows, 1)
 
-TODO:
--------------------------
-* Tender maya style bone mesh.
-
 BUILD
 -----------
-* dump "views" for input and output tensors.
+* use "lenses" for input and output tensors.
 
 VISUALIZE
 -----------
-* Do inference with joystick controls
+* inference with joystick controls
+  * fix joystick dir
+  * draw contacts
+  * fix follow cam
+  * fix stutter step. Problem with catmull-rom phase?
 
 
 

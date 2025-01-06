@@ -45,7 +45,7 @@ class CharacterMovement(FlyCamInterface):
         self.camera_mat[:3, 3] = self.pos
 
     def process(self, dt: float, left_stick: np.ndarray, right_stick: np.ndarray, roll_amount: float, up_amount: float):
-        STIFF = 50.0
+        STIFF = 200.0
         K = STIFF / self.speed
 
         # left_stick controls position, in world space!
@@ -368,6 +368,8 @@ class VisOutputRenderBuddy(RenderBuddy):
     draw_output_trajectory: bool
     draw_input_trajectory: bool
     root_xform: np.ndarray
+    input_traj_line: gfx.Group
+    output_traj_line: gfx.Group
 
     def __init__(
         self,
@@ -409,8 +411,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.y = build_idle_output(self.y_lens)
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
-        # one second of history
-        self.history_xforms = np.tile(np.eye(4), (SAMPLE_RATE, 1, 1))
+        # two second of history
+        self.history_xforms = np.tile(np.eye(4), (SAMPLE_RATE * 2, 1, 1))
         self.history_cursor = 0
         self.root_xform = np.eye(4)
 
@@ -421,12 +423,14 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.scene.add(self.group)
 
         self.skeleton_group = gfx.Group()
-        self.traj_line = gfx.Group()
-        self.skeleton_group.add(self.traj_line)
+        self.input_traj_line = gfx.Group()
+        self.skeleton_group.add(self.input_traj_line)
+        self.output_traj_line = gfx.Group()
+        self.skeleton_group.add(self.output_traj_line)
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
-        self.draw_output_trajectory = False
+        self.draw_output_trajectory = True
         self.draw_input_trajectory = True
 
         self.animate_skeleton()
@@ -500,12 +504,12 @@ class VisOutputRenderBuddy(RenderBuddy):
                 positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
                 colors += [[0, 1, 0, 1], [0, 1, 0, 1]]
 
-            traj_line = gfx.Line(
+            output_traj_line = gfx.Line(
                 gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
             )
-            self.skeleton_group.remove(self.traj_line)
-            self.skeleton_group.add(traj_line)
-            self.traj_line = traj_line
+            self.skeleton_group.remove(self.output_traj_line)
+            self.skeleton_group.add(output_traj_line)
+            self.output_traj_line = output_traj_line
 
         if self.draw_input_trajectory:
 
@@ -531,15 +535,15 @@ class VisOutputRenderBuddy(RenderBuddy):
                 positions += [[p0[0], 0.05, p0[1]], [p1[0], 0.05, p1[1]]]
                 colors += [[0, 1, 0, 1], [0, 1, 0, 1]]
 
-            traj_line = gfx.Line(
+            input_traj_line = gfx.Line(
                 gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
             )
-            self.skeleton_group.remove(self.traj_line)
-            self.skeleton_group.add(traj_line)
-            self.traj_line = traj_line
+            self.skeleton_group.remove(self.input_traj_line)
+            self.skeleton_group.add(input_traj_line)
+            self.input_traj_line = input_traj_line
 
         # record traj history.
-        self.history_cursor = (self.history_cursor + 1) % SAMPLE_RATE
+        self.history_cursor = (self.history_cursor + 1) % (SAMPLE_RATE * 2)
         self.history_xforms[self.history_cursor] = self.root_xform
 
 
@@ -585,24 +589,17 @@ class VisOutputRenderBuddy(RenderBuddy):
         history_step = SAMPLE_RATE // TRAJ_SAMPLE_RATE
         N = TRAJ_WINDOW_SIZE // 2
         for i in range(N):
-            cursor = (self.history_cursor - (history_step * (i + 1))) % SAMPLE_RATE
-
-            traj_index = N + 1
+            cursor = (self.history_cursor - (history_step * (i + 1))) % (SAMPLE_RATE * 2)
 
             # rotate xform into root space
             xform = inv_root_xform @ self.history_xforms[cursor]
             traj_pos = xform[:3, 3]
-            traj_dir = mu.quat_rotate(mu.quat_from_mat(xform), np.array([0, 0, -1]))
+            traj_dir = mu.quat_rotate(mu.quat_from_mat(xform), np.array([1, 0, 0]))
 
-            self.x_lens.traj_pos_i.set(x, N - i, nograd_tensor([traj_pos[0], traj_pos[2]]))
-            self.x_lens.traj_dir_i.set(x, N - i, nograd_tensor([traj_dir[0], traj_dir[2]]))
+            self.x_lens.traj_pos_i.set(x, (N - 1) - i, nograd_tensor([traj_pos[0], traj_pos[2]]))
+            self.x_lens.traj_dir_i.set(x, (N - 1) - i, nograd_tensor([traj_dir[0], traj_dir[2]]))
 
-        for i in range(TRAJ_WINDOW_SIZE // 2):
-            traj_pos = self.x_lens.traj_pos_i.get(x, i)
-            traj_dir = self.x_lens.traj_dir_i.get(x, i)
-            print(f"traj[{i}] = pos = {traj_pos}, dir = {traj_dir}")
-
-        MOVE_SPEED = 22.5
+        MOVE_SPEED = 42.5
         ROT_SPEED = 3.15
         up = np.array([0, 1, 0])
         init_rot = mu.quat_from_angle_axis(-np.pi / 2, up)
@@ -657,8 +654,8 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # integrate phase
         phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
-        MIN_PHASE_VEL = 0.5
-        MAX_PHASE_VEL = 100.0
+        MIN_PHASE_VEL = 0.0
+        MAX_PHASE_VEL = 100000.0
         phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
         self.p += phase_vel * (1 / SAMPLE_RATE)
         self.p = self.p % (2 * math.pi)
