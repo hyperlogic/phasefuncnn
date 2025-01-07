@@ -90,9 +90,3 @@ VISUALIZE
   * fix follow cam
   * fix stutter step. Problem with catmull-rom phase?
 
-
-
-
-
-
-

@@ -430,8 +430,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
-        self.draw_output_trajectory = True
-        self.draw_input_trajectory = True
+        self.draw_output_trajectory = False
+        self.draw_input_trajectory = False
 
         self.animate_skeleton()
 
@@ -481,8 +481,13 @@ class VisOutputRenderBuddy(RenderBuddy):
             delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt
         )
         self.root_xform = self.root_xform @ delta_xform
-        self.skeleton_group.local.position = self.root_xform[0:3, 3]
+        root_pos = self.root_xform[0:3, 3]
+        self.skeleton_group.local.position = root_pos
         self.skeleton_group.local.rotation = mu.quat_from_mat(self.root_xform)
+
+        # update camera target
+        cam_height = 20
+        self.flycam.target = root_pos + np.array([0, cam_height, 0])
 
         if self.draw_output_trajectory:
             # create lines for the trajectory
@@ -618,7 +623,10 @@ class VisOutputRenderBuddy(RenderBuddy):
         c_stick = cmath.rect(1.0, theta) * complex(left_stick[1], left_stick[0])
         world_stick = np.array([c_stick.real, 0, c_stick.imag])
 
-        stick = np.array([world_stick[0], world_stick[2]])
+        # rotate stick into root frame.
+        root_stick = np.linalg.inv(self.root_xform[:3, :3]) @ world_stick
+
+        stick = np.array([root_stick[0], root_stick[2]])
 
         # initialize future part of traj from joystick
         for i in range(TRAJ_WINDOW_SIZE // 2, TRAJ_WINDOW_SIZE):
@@ -660,7 +668,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.p += phase_vel * (1 / SAMPLE_RATE)
         self.p = self.p % (2 * math.pi)
 
-        print(f"phase = {self.p}, phase_vel = {phase_vel}")
+        #print(f"phase = {self.p}, phase_vel = {phase_vel}")
 
         self.y = self.model(self.x, self.p).detach()
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
