@@ -22,8 +22,8 @@ class FollowCam(FlyCamInterface):
         self.move_speed = move_speed
         self.orbit_speed = orbit_speed
 
-        camera_mat = np.eye(4)
-        self.rot = mu.quat_from_mat(camera_mat)
+        self.camera_mat = np.eye(4)
+        self.rot = mu.quat_from_mat(self.camera_mat)
         self.pos = mu.quat_rotate(self.rot, np.array([0, 0, radius], dtype=np.float32))
 
     def process(self, dt: float, left_stick: np.ndarray, right_stick: np.ndarray, roll_amount: float, up_amount: float):
