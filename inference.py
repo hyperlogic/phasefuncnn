@@ -352,7 +352,7 @@ class VisOutputRenderBuddy(RenderBuddy):
     y_lens: datalens.OutputLens
     model: nn.Module
     x: torch.Tensor
-    p: float
+    phase: float
     y_mean: torch.Tensor
     y_std: torch.Tensor
     x_mean: torch.Tensor
@@ -367,6 +367,7 @@ class VisOutputRenderBuddy(RenderBuddy):
     history_cursor: int
     draw_output_trajectory: bool
     draw_input_trajectory: bool
+    draw_phase: bool
     root_xform: np.ndarray
     input_traj_line: gfx.Group
     output_traj_line: gfx.Group
@@ -407,7 +408,7 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # setup initial state
         self.x = build_idle_input(self.x_lens)
-        self.p = nograd_tensor(0.0)
+        self.phase = nograd_tensor(0.0)
         self.y = build_idle_output(self.y_lens)
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
@@ -432,8 +433,18 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         self.draw_output_trajectory = False
         self.draw_input_trajectory = False
+        self.draw_phase = True
 
-        self.animate_skeleton()
+        # add a line for rendering phase as a clock
+        if self.draw_phase:
+            self.clock_group = gfx.Group()
+            clock_hand = gfx.Mesh(gfx.box_geometry(0.1, 1, 0.1), gfx.MeshPhongMaterial(color="#ffffff"))
+            clock_hand.local.position = [0, 0.5, 0]
+            clock_dial = gfx.Mesh(gfx.sphere_geometry(1), gfx.MeshPhongMaterial(color="#0000ff"))
+            clock_dial.local.scale = [1, 1, 0.001]
+            self.clock_group.add(clock_hand)
+            self.clock_group.add(clock_dial)
+            self.scene.add(self.clock_group)
 
         self.playing = False
         self.tick_once = False
@@ -446,6 +457,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         )
         self.scene.add(self.stick_line)
 
+        self.animate_skeleton()
 
     def animate_skeleton(self):
 
@@ -546,6 +558,17 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.skeleton_group.remove(self.input_traj_line)
             self.skeleton_group.add(input_traj_line)
             self.input_traj_line = input_traj_line
+
+        # animate phase
+        if self.draw_phase:
+            cam_xform = mu.build_mat_from_quat(np.eye(4), self.flycam.rot)
+            cam_xform[0:3, 3] = self.camera.world.position
+            offset_pos = np.array([10, 7, -20, 1])
+            phase_xform = mu.build_mat_rotz(np.eye(4), -self.phase.item())
+
+            self.clock_group.world.position = (cam_xform @ offset_pos)[0:3]
+            self.clock_group.world.rotation = mu.quat_from_mat(cam_xform @ phase_xform)
+
 
         # record traj history.
         self.history_cursor = (self.history_cursor + 1) % (SAMPLE_RATE * 2)
@@ -664,13 +687,13 @@ class VisOutputRenderBuddy(RenderBuddy):
         phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
         MIN_PHASE_VEL = 0.0
         MAX_PHASE_VEL = 100000.0
-        phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
-        self.p += phase_vel * (1 / SAMPLE_RATE)
-        self.p = self.p % (2 * math.pi)
+        #phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
+        self.phase += phase_vel * (1 / SAMPLE_RATE)
+        self.phase = self.phase % (2 * math.pi)
 
-        #print(f"phase = {self.p}, phase_vel = {phase_vel}")
+        print(f"phase_vel = {phase_vel}")
 
-        self.y = self.model(self.x, self.p).detach()
+        self.y = self.model(self.x, self.phase).detach()
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
     def on_key_down(self, event):
@@ -714,12 +737,12 @@ if __name__ == "__main__":
     state_dict = torch.load(os.path.join(OUTPUT_DIR, "final_checkpoint.pth"), weights_only=False)
     model.load_state_dict(state_dict)
 
-    # load input, and phase
+    # load input mean, std and weights. used to unnormalize the inputs
     X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True)
     X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
     X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
 
-    # load output
+    # load output mean and std. used to unnormalize the outputs
     Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
 
