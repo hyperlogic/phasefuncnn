@@ -45,6 +45,24 @@ def build_contacts(skeleton: Skeleton, xforms: np.ndarray) -> np.ndarray:
     return contacts
 
 
+# states:
+#   0 = no feet down
+#   1 = right foot down - phase = 0
+#   2 = left foot down - phase = pi
+#   3 = both feet down
+#
+# state phase matrix
+# each row is indexed by the current state.
+# each column is indexed by the state you are transitioning to.
+# the value of the phase at that transition
+state_phase = [
+    [None, 0, math.pi, 0],
+    [None, None, math.pi, math.pi],
+    [None, 0, None, 0],
+    [None, 0, math.pi, None],
+]
+
+
 # 0 = no feet down, 1 = right foot down, 2 = left foot down, 3 = both feet down
 def make_state(contact: np.ndarray) -> int:
     state = 0
@@ -55,14 +73,6 @@ def make_state(contact: np.ndarray) -> int:
     if contact[0] > 0.5 or contact[2] > 0.5:
         state += 2
     return state
-
-
-state_phase = [
-    [None, 0, math.pi, 0],
-    [None, None, math.pi, math.pi],
-    [None, 0, None, 0],
-    [None, 0, math.pi, None],
-]
 
 
 def build_phase(contacts: np.ndarray) -> np.ndarray:
