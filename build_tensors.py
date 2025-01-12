@@ -13,6 +13,7 @@ import torch
 from typing import Tuple
 
 from skeleton import Skeleton
+import datalens
 
 OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
@@ -28,14 +29,18 @@ def unpickle_obj(filename: str):
 def build_tensors(
     skeleton: Skeleton,
     root: torch.Tensor,
-    jointva: torch.Tensor,
+    jointpva: torch.Tensor,
     traj: torch.Tensor,
     rootvel: torch.Tensor,
     contacts: torch.Tensor,
+    phase: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     num_joints = skeleton.num_joints
     num_rows = root.shape[0] - 2  # skip the first and last frame
     t = (1 / SAMPLE_RATE) * 2
+
+    x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, num_joints)
+    y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, num_joints)
 
     traj_size = TRAJ_WINDOW_SIZE * 4
     jointpv_size = num_joints * 6
@@ -52,41 +57,46 @@ def build_tensors(
     )
     y = torch.zeros(y_shape)
 
-    for row in range(num_rows):
-        frame = row + 1
+    # skip the first frames, and the last frame
+    for i in range(1, root.shape[0] - 1):
+        x_row = x[i - 1]
 
-        col = 0
-        x[row, col : col + traj_size] = traj[frame]
-        col += traj_size
-        x[row, col : col + jointpv_size] = jointpva[frame - 1, :, 0:6].flatten()
-        col += jointpv_size
-        assert col == x.shape[1]
+        for j in range(TRAJ_WINDOW_SIZE):
+            traj_start = j * TRAJ_ELEMENT_SIZE
+            x_lens.traj_pos_i.set(x_row, j, traj[i, traj_start:traj_start+2])
+            x_lens.traj_dir_i.set(x_row, j, traj[i, traj_start+2:traj_start+4])
 
-        col = 0
-        y[row, col : col + traj_size] = traj[frame + 1]
-        col += traj_size
-        y[row, col : col + jointpva_size] = jointpva[frame, :, :].flatten()
-        col += jointpva_size
-        y[row, col : col + rootvel_size] = rootvel[frame]
-        col += rootvel_size
+        for j in range(num_joints):
+            x_lens.joint_pos_im1.set(x_row, j, jointpva[i - 1, j, 0:3])
+            x_lens.joint_vel_im1.set(x_row, j, jointpva[i - 1, j, 3:6])
 
         # compute phase_vel
-
         # Represent angles as unit complex numbers
-        z1 = cmath.rect(1, phase[frame - 1])
-        z2 = cmath.rect(1, phase[frame + 1])
+        z1 = cmath.rect(1, phase[i - 1].item())
+        z2 = cmath.rect(1, phase[i + 1].item())
         diff = cmath.phase(z2 / z1)
         # ensure that phase_vel is always positive
         if diff < 0:
             diff = 2 * np.pi + diff
         phase_vel = diff / t
-        y[row, col] = phase_vel
-        assert phase_vel >= 0, f"p1 = {phase[frame - 1]}, p2 = {phase[frame + 1]}, diff = {diff}, diff2 = {phase[frame + 1] - phase[frame - 1]}"
+        assert phase_vel >= 0, f"p1 = {phase[i - 1]}, p2 = {phase[i + 1]}, diff = {diff}, diff2 = {phase[i + 1] - phase[i - 1]}"
 
-        col += 1
-        y[row, col : col + contacts_size] = contacts[frame]
-        col += contacts_size
-        assert col == y.shape[1]
+        y_row = y[i - 1]
+
+        for j in range(TRAJ_WINDOW_SIZE):
+            traj_start = j * TRAJ_ELEMENT_SIZE
+            y_lens.traj_pos_ip1.set(y_row, j, traj[i + 1, traj_start:traj_start+2])
+            y_lens.traj_dir_ip1.set(y_row, j, traj[i + 1, traj_start+2:traj_start+4])
+
+        for j in range(num_joints):
+            y_lens.joint_pos_i.set(y_row, j, jointpva[i, j, 0:3])
+            y_lens.joint_vel_i.set(y_row, j, jointpva[i, j, 3:6])
+            y_lens.joint_rot_i.set(y_row, j, jointpva[i, j, 6:9])
+
+        y_lens.root_vel_i.set(y_row, 0, rootvel[i, 0:2])
+        y_lens.root_angvel_i.set(y_row, 0, rootvel[i, 2:3])
+        y_lens.phase_vel_i.set(y_row, 0, phase_vel)
+        y_lens.contacts_i.set(y_row, 0, contacts[i])
 
     return x, y
 
@@ -96,6 +106,10 @@ if __name__ == "__main__":
         print("Error: expected list of mocap filenames (without .bvh extension)")
         exit(1)
 
+    X = torch.tensor([], dtype=torch.float32, requires_grad=False)
+    Y = torch.tensor([], dtype=torch.float32, requires_grad=False)
+    P = torch.tensor([], dtype=torch.float32, requires_grad=False)
+    num_joints = 0
     for i in range(len(sys.argv) - 1):
         outbasepath = os.path.join(OUTPUT_DIR, sys.argv[i + 1])
         skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
@@ -140,8 +154,8 @@ if __name__ == "__main__":
         contacts = torch.from_numpy(contacts)
         phase = torch.from_numpy(phase)
 
-        x, y = build_tensors(skeleton, root, jointpva, traj, rootvel, contacts)
-        p = phase[1:-1]
+        x, y = build_tensors(skeleton, root, jointpva, traj, rootvel, contacts, phase)
+        p = phase[1:-1]  # also skip the first and last frame, to match x, y
 
         print(f"    x.shape = {x.shape}")
         print(f"    y.shape = {y.shape}")

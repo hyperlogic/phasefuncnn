@@ -34,7 +34,7 @@ class MocapDataset(torch.utils.data.Dataset):
         return self.X.shape[0] - 1
 
     def __getitem__(self, idx):
-        return self.X[idx], self.Y[idx + 1], self.P[idx]
+        return self.X[idx], self.Y[idx], self.P[idx]
 
 # hyperparameters?
 MAX_EPOCHS = 10000

@@ -128,11 +128,17 @@ class VisOutputRenderBuddy(RenderBuddy):
 
     def on_dpad_left(self):
         super().on_dpad_left()
-        print("DPAD LEFT!")
+        row = self.row - 1
+        if row < 0:
+            row = self.Y.shape[0] - 1
+        self.animate_skeleton(row)
 
     def on_dpad_right(self):
         super().on_dpad_right()
-        print("DPAD RIGHT!")
+        row = self.row + 1
+        if row >= self.Y.shape[0]:
+            row = 0
+        self.animate_skeleton(row)
 
 
 if __name__ == "__main__":

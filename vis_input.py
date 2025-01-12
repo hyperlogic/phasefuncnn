@@ -106,12 +106,17 @@ class VisInputRenderBuddy(RenderBuddy):
 
     def on_dpad_left(self):
         super().on_dpad_left()
-        print("DPAD LEFT!")
+        row = self.row - 1
+        if row < 0:
+            row = self.X.shape[0] - 1
+        self.retain_row(row)
 
     def on_dpad_right(self):
         super().on_dpad_right()
-        print("DPAD RIGHT!")
-
+        row = self.row + 1
+        if row >= self.X.shape[0]:
+            row = 0
+        self.retain_row(row)
 
 if __name__ == "__main__":
     # unpickle skeleton

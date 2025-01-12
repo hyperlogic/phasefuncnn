@@ -78,15 +78,14 @@ phase_i-1 - 1 float
 
 shape = (num_rows, 1)
 
-BUILD
------------
-* use "lenses" for input and output tensors.
+
 
 VISUALIZE
 -----------
-* inference with joystick controls
-  * fix joystick dir
-  * draw contacts
-  * fix follow cam
-  * fix stutter step. Problem with catmull-rom phase?
+* draw contacts
+* Better fix follow cam
 
+MODEL
+--------------
+* fix stuttering. WTF
+* allow pfnn to work with non batched x, and phase, for convenience
