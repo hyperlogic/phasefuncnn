@@ -31,17 +31,17 @@ class MocapDataset(torch.utils.data.Dataset):
         assert self.Y.shape[0] == self.P.shape[0]
 
     def __len__(self):
-        return self.X.shape[0]
+        return self.X.shape[0] - 1
 
     def __getitem__(self, idx):
-        return self.X[idx], self.Y[idx], self.P[idx]
+        return self.X[idx], self.Y[idx + 1], self.P[idx]
 
 # hyperparameters?
 MAX_EPOCHS = 10000
 BATCH_SIZE = 512
 VAL_DATASET_FACTOR = 0.3  # percentage of data that is reserved for validation set
-L1_LAMBDA = 0.0005  # regularization weight
-MAX_EPOCHS_WITHOUT_IMPROVEMENT = 50  # early termination
+L1_LAMBDA = 0.000005  # regularization weight
+MAX_EPOCHS_WITHOUT_IMPROVEMENT = 20  # early termination
 CHECKPOINT_CADENCE = 100
 DROPOUT_RATE = 0.3
 LEARNING_RATE = 0.00005

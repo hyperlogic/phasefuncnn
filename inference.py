@@ -388,7 +388,7 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # override flycam with follow cam
         ORBIT_SPEED = 1.15
-        MOVE_SPEED = 22.5
+        MOVE_SPEED = 12.5
         RADIUS = 50
         target_y = 15
 
@@ -431,8 +431,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
-        self.draw_output_trajectory = False
-        self.draw_input_trajectory = False
+        self.draw_output_trajectory = True
+        self.draw_input_trajectory = True
         self.draw_phase = True
 
         # add a line for rendering phase as a clock
@@ -627,8 +627,8 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.x_lens.traj_pos_i.set(x, (N - 1) - i, nograd_tensor([traj_pos[0], traj_pos[2]]))
             self.x_lens.traj_dir_i.set(x, (N - 1) - i, nograd_tensor([traj_dir[0], traj_dir[2]]))
 
-        MOVE_SPEED = 42.5
-        ROT_SPEED = 3.15
+        MOVE_SPEED = 20.5
+        ROT_SPEED = 2.15
         up = np.array([0, 1, 0])
         init_rot = mu.quat_from_angle_axis(-np.pi / 2, up)
         mover = CharacterMovement(up, np.array([0, 0, 0]), init_rot, MOVE_SPEED, ROT_SPEED)
@@ -687,13 +687,22 @@ class VisOutputRenderBuddy(RenderBuddy):
         phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
         MIN_PHASE_VEL = 0.0
         MAX_PHASE_VEL = 100000.0
-        #phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
+        phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
         self.phase += phase_vel * (1 / SAMPLE_RATE)
         self.phase = self.phase % (2 * math.pi)
 
         print(f"phase_vel = {phase_vel}")
 
-        self.y = self.model(self.x, self.phase).detach()
+        # make a batch of 1
+        x = self.x.unsqueeze(0)
+        phase = self.phase.unsqueeze(0)
+
+        # run the model!
+        self.y = self.model(x, phase).detach()
+
+        # unbatch and unnormalize output
+        self.y = self.y.squeeze()
+
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
     def on_key_down(self, event):

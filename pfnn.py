@@ -9,6 +9,7 @@ NUM_CONTROL_POINTS = 4
 NUM_QUADRANTS = 4
 NUM_BASIS_FUNCTIONS = 4
 
+
 class PhaseLinear(nn.Module):
     in_features: int
     out_features: int
@@ -50,58 +51,63 @@ class PhaseLinear(nn.Module):
         # phase is is between 0 and 2pi.
         # Catmull-Rom expects 4 control points, (P_i-1, P_i, P_i+1, P_i+2) and a t between [0, 1]
         # depending on which quadrant of the circle we are on, we choose different control points accordingly.
-        # In order to do this in batches we use do all 4 quadrants simultaniously then use buckets to mask the result.
+        # In order to do this in batches we use do all 4 quadrants simultaniously then mask the result.
 
-        bounds = torch.tensor([0, 0.5, 1, 1.5, 2]) * torch.pi
-        buckets = torch.bucketize(phase, bounds, right=False)
-        control_point_indices = torch.tensor([[3, 0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 0], [2, 3, 0, 1]], device=phase.device)
+        bounds = torch.tensor([0, 0.5, 1, 1.5, 2], device=phase.device) * torch.pi
+        # buckets = torch.bucketize(phase, bounds, right=False)
+        control_point_indices = torch.tensor(
+            [[3, 0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 0], [2, 3, 0, 1]], device=phase.device
+        )
 
-        ws, bs = [], []
+        masks, ws, bs = [], [], []
         for i in range(NUM_QUADRANTS):
-            t = (phase - bounds[i]) / (bounds[i+1] - bounds[i])
+            masks.append(((phase >= bounds[i]) & (phase < bounds[i + 1])).unsqueeze(-1))
+
+            t = (phase - bounds[i]) / (bounds[i + 1] - bounds[i])
             tt = torch.stack([t**3, t**2, t, torch.ones_like(t)], dim=-1)
 
             indices = control_point_indices[i]
 
-            # Use weights.view to convert weights from (4, N, M) into (4, N * M)
+            # Use weights.view to convert weights from (4, M, N) into (4, M * N)
             w = tt @ self.basis @ self.weights[indices].view(4, -1)
             b = tt @ self.basis @ self.biases[indices]
 
             ws.append(w)
             bs.append(b)
 
-        # Stack results and index the correct one for each phase
-        ws = torch.stack(ws, dim=0)
-        w = ws[buckets, torch.arange(batch_size)]  # Select the correct result for each phase
+        w = torch.where(masks[0], ws[0], torch.where(masks[1], ws[1], torch.where(masks[2], ws[2], ws[3])))
+        b = torch.where(masks[0], bs[0], torch.where(masks[1], bs[1], torch.where(masks[2], bs[2], bs[3])))
 
-        bs = torch.stack(bs, dim=0)  # Shape: (NUM_QUADRANTS, batch_size, ...)
-        b = bs[buckets, torch.arange(batch_size)]  # Select the correct result for each phase
-
-        # Use w.view to convert from (batch_size, N * M) into (batch_size, N, M)
+        # Use w.view to convert from (batch_size, M * N) into (batch_size, M, N)
         w = w.view(batch_size, self.out_features, self.in_features)
         return w, b
 
     def forward(self, input: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
 
-        single_sample = input.ndim == 1
-        if single_sample:
-            input = input.unsqueeze(0)  # Add batch dimension!
-            phase = phase.unsqueeze(0)
-
         w, b = self.phase_function(phase)
 
-        # F.linear(input, w, b)
-        result = w @ input.unsqueeze(-1) + b.unsqueeze(-1)
-        result = result.squeeze(-1)
+        B = input.shape[0]
+        N = self.in_features
+        M = self.out_features
 
-        assert result.shape[0] == input.shape[0], "batch size must be the same"
-        assert result.shape[1] == self.out_features, "result must have same size as out_features"
+        XX = input.unsqueeze(1)
+        AA = torch.transpose(w, 1, 2)
+        BB = b.unsqueeze(1)
 
-        # If input was non-batched, remove the batch dimension from the output
-        if single_sample:
-            result = result.squeeze(0)  # Remove batch dimension!
+        # print(f"input = {input.shape}")
+        # print(f"w = {w.shape}, b = {b.shape}")
+        # print(f"XX = {XX.shape} AA = {AA.shape}, BB = {BB.shape}")
 
-        return result
+        assert XX.shape == (B, 1, N)
+        assert AA.shape == (B, N, M)
+
+        # batched version of input @ w^T + b
+        result = torch.bmm(XX, AA) + BB
+
+        # print(f"result = {result.shape}")
+        assert result.shape == (B, 1, M)
+
+        return result.squeeze(1)
 
 
 class PFNN(nn.Module):
