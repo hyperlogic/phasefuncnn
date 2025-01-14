@@ -52,6 +52,7 @@ if __name__ == "__main__":
         exit(1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # AJT: REMOVE force cpu
     print(f"cuda.is_available() = {torch.cuda.is_available()}")
     print(f"device = {device}")
 
@@ -110,7 +111,6 @@ if __name__ == "__main__":
         for x, y, p in train_loader:
             x, y, p = x.to(device), y.to(device), p.to(device)
 
-            optimizer.zero_grad()
             output = model(x, p)
             l1_reg = sum(param.abs().sum() for param in model.parameters())
             loss = criterion(output, y) + L1_LAMBDA * l1_reg
@@ -120,6 +120,7 @@ if __name__ == "__main__":
             train_loss += loss.item()
             train_count += 1
 
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 

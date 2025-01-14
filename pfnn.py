@@ -5,9 +5,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-NUM_CONTROL_POINTS = 4
+
 NUM_QUADRANTS = 4
 NUM_BASIS_FUNCTIONS = 4
+
+NUM_CONTROL_POINTS = 4
 
 
 class PhaseLinear(nn.Module):
@@ -115,8 +117,9 @@ class PFNN(nn.Module):
         super(PFNN, self).__init__()
 
         # catmull rom basis
-        self.basis = torch.tensor(
-            [[0.0, 2.0, 0.0, 0.0], [-1.0, 0.0, 1.0, 0.0], [2.0, -5.0, 4.0, -1.0], [-1.0, 3.0, -3.0, 1.0]], device=device
+        self.basis = 0.5 * torch.tensor(
+            [[-1.0, 3.0, -3.0, 1.0], [2.0, -5.0, 4.0, -1.0], [-1.0, 0.0, 1.0, 0.0], [0.0, 2.0, 0.0, 0.0]],
+            device=device,
         )
 
         self.fc1 = PhaseLinear(in_features, 512, self.basis, device=device)
@@ -141,44 +144,31 @@ def nograd_tensor(array: list):
 if __name__ == "__main__":
     # test PhaseLinear module
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     torch.no_grad()
 
     # catmull rom basis
     basis = 0.5 * torch.tensor(
         [[-1.0, 3.0, -3.0, 1.0], [2.0, -5.0, 4.0, -1.0], [-1.0, 0.0, 1.0, 0.0], [0.0, 2.0, 0.0, 0.0]],
-        device="cpu",
+        device=device,
         requires_grad=False,
     )
 
-    pl = PhaseLinear(2, 2, basis, device="cpu")
-    ll = nn.Linear(2, 2, device="cpu")
+    pl = PhaseLinear(2, 2, basis, device=device)
 
     with torch.no_grad():
 
-        weights = nograd_tensor([[[0, 0], [1, 0]], [[-1, 0], [0, 0]], [[0, 0], [-1, 0]], [[1, 0], [0, 0]]])
-        biases = torch.zeros(4, 2)
-        pl.weights.copy_(weights)
-        pl.biases.copy_(biases)
+        weights = nograd_tensor([[[0, 0], [1, 0]], [[-1, 0], [0, 0]], [[0, 0], [-1, 0]], [[1, 0], [0, 0]]]).to(device)
+        biases = torch.zeros(4, 2).to(device)
+        pl.weights.copy_(weights).to(device)
+        pl.biases.copy_(biases).to(device)
+        x = nograd_tensor([[1, 0], [1, 0], [1, 0], [1, 0]]).to(device)
+        phase = nograd_tensor([0, torch.pi / 2, torch.pi, 3 * torch.pi / 2]).to(device)
 
-        ll.weight.copy_(nograd_tensor([[0, 0], [1, 0]]))
-        ll.bias.copy_(torch.zeros(2))
-
-        x = nograd_tensor([[1, 0]])
-        phase = nograd_tensor([0])
         y = pl(x, phase)
-        print(f"pl({x}, {phase}) = {y}")
-
-        y = ll(x)
-        print(f"ll({x}) = {y}")
-
-        phase = nograd_tensor([torch.pi / 2])
-        y = pl(x, phase)
-        print(f"pl({x}, {phase}) = {y}")
-
-        phase = nograd_tensor([torch.pi])
-        y = pl(x, phase)
-        print(f"pl({x}, {phase}) = {y}")
-
-        phase = nograd_tensor([3 * torch.pi / 2])
-        y = pl(x, phase)
-        print(f"pl({x}, {phase}) = {y}")
+        print(f"x = {x}")
+        print("")
+        print(f"phase = {phase}")
+        print("")
+        print(f"y = {y}")

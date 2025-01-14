@@ -45,6 +45,7 @@ class CharacterMovement(FlyCamInterface):
         self.camera_mat[:3, 3] = self.pos
 
     def process(self, dt: float, left_stick: np.ndarray, right_stick: np.ndarray, roll_amount: float, up_amount: float):
+        _ = up_amount, roll_amount, right_stick
         STIFF = 200.0
         K = STIFF / self.speed
 
@@ -352,7 +353,7 @@ class VisOutputRenderBuddy(RenderBuddy):
     y_lens: datalens.OutputLens
     model: nn.Module
     x: torch.Tensor
-    phase: float
+    phase: torch.Tensor
     y_mean: torch.Tensor
     y_std: torch.Tensor
     x_mean: torch.Tensor
@@ -408,12 +409,12 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # setup initial state
         self.x = build_idle_input(self.x_lens)
-        self.phase = nograd_tensor(0.0)
+        self.phase = nograd_tensor([0.0])
         self.y = build_idle_output(self.y_lens)
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
         # two second of history
-        self.history_xforms = np.tile(np.eye(4), (SAMPLE_RATE * 2, 1, 1))
+        self.history_xforms = torch.tile(torch.eye(4), (SAMPLE_RATE * 2, 1, 1))
         self.history_cursor = 0
         self.root_xform = np.eye(4)
 
@@ -431,8 +432,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
-        self.draw_output_trajectory = True
-        self.draw_input_trajectory = True
+        self.draw_output_trajectory = False
+        self.draw_input_trajectory = False
         self.draw_phase = True
 
         # add a line for rendering phase as a clock
@@ -572,7 +573,7 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # record traj history.
         self.history_cursor = (self.history_cursor + 1) % (SAMPLE_RATE * 2)
-        self.history_xforms[self.history_cursor] = self.root_xform
+        self.history_xforms[self.history_cursor] = torch.from_numpy(self.root_xform)
 
 
     def on_animate(self, dt: float):
@@ -613,7 +614,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         x = x_lens.unnormalize(x, self.x_mean, self.x_std, self.x_w)
 
         # initialize past part of traj from history_xforms
-        inv_root_xform = np.linalg.inv(self.root_xform)
+        inv_root_xform = torch.inverse(torch.from_numpy(self.root_xform.astype(np.float32)))
         history_step = SAMPLE_RATE // TRAJ_SAMPLE_RATE
         N = TRAJ_WINDOW_SIZE // 2
         for i in range(N):
@@ -627,8 +628,8 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.x_lens.traj_pos_i.set(x, (N - 1) - i, nograd_tensor([traj_pos[0], traj_pos[2]]))
             self.x_lens.traj_dir_i.set(x, (N - 1) - i, nograd_tensor([traj_dir[0], traj_dir[2]]))
 
-        MOVE_SPEED = 20.5
-        ROT_SPEED = 2.15
+        MOVE_SPEED = 75.5
+        ROT_SPEED = 5.15
         up = np.array([0, 1, 0])
         init_rot = mu.quat_from_angle_axis(-np.pi / 2, up)
         mover = CharacterMovement(up, np.array([0, 0, 0]), init_rot, MOVE_SPEED, ROT_SPEED)
@@ -651,7 +652,7 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         stick = np.array([root_stick[0], root_stick[2]])
 
-        # initialize future part of traj from joystick
+        # initialize future part of traj from the mover (controlled via joystick)
         for i in range(TRAJ_WINDOW_SIZE // 2, TRAJ_WINDOW_SIZE):
 
             pos = mover.pos
@@ -679,8 +680,6 @@ class VisOutputRenderBuddy(RenderBuddy):
         x = x_lens.normalize(x, self.x_mean, self.x_std, self.x_w)
         return x
 
-
-
     def tick_model(self):
 
         # integrate phase
@@ -694,14 +693,14 @@ class VisOutputRenderBuddy(RenderBuddy):
         print(f"phase_vel = {phase_vel}")
 
         # make a batch of 1
-        x = self.x.unsqueeze(0)
-        phase = self.phase.unsqueeze(0)
+        x = self.x.unsqueeze(0).to(device)
+        phase = self.phase.to(device)
 
         # run the model!
-        self.y = self.model(x, phase).detach()
+        y = self.model(x, phase).detach()
 
         # unbatch and unnormalize output
-        self.y = self.y.squeeze()
+        self.y = y.squeeze().detach().to("cpu")
 
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
@@ -731,7 +730,8 @@ if __name__ == "__main__":
 
     print(f"skeleton.num_joints = {skeleton.num_joints}")
 
-    device = torch.device("cpu")
+    #device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"cuda.is_available() = {torch.cuda.is_available()}")
     print(f"device = {device}")
 
@@ -744,6 +744,7 @@ if __name__ == "__main__":
     model = PFNN(in_features, out_features, device=device)
     model.eval()  # deactivate dropout
     state_dict = torch.load(os.path.join(OUTPUT_DIR, "final_checkpoint.pth"), weights_only=False)
+
     model.load_state_dict(state_dict)
 
     # load input mean, std and weights. used to unnormalize the inputs
