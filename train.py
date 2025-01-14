@@ -52,7 +52,6 @@ if __name__ == "__main__":
         exit(1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # AJT: REMOVE force cpu
     print(f"cuda.is_available() = {torch.cuda.is_available()}")
     print(f"device = {device}")
 
@@ -70,7 +69,7 @@ if __name__ == "__main__":
     for name, param in model.named_parameters():
         print(f"    {name}, size = {param.size()}")
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
 
     criterion = nn.MSELoss()
 

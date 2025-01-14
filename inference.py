@@ -628,8 +628,8 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.x_lens.traj_pos_i.set(x, (N - 1) - i, nograd_tensor([traj_pos[0], traj_pos[2]]))
             self.x_lens.traj_dir_i.set(x, (N - 1) - i, nograd_tensor([traj_dir[0], traj_dir[2]]))
 
-        MOVE_SPEED = 75.5
-        ROT_SPEED = 5.15
+        MOVE_SPEED = 35.5
+        ROT_SPEED = 3.15
         up = np.array([0, 1, 0])
         init_rot = mu.quat_from_angle_axis(-np.pi / 2, up)
         mover = CharacterMovement(up, np.array([0, 0, 0]), init_rot, MOVE_SPEED, ROT_SPEED)
@@ -686,7 +686,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
         MIN_PHASE_VEL = 0.0
         MAX_PHASE_VEL = 100000.0
-        phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
+        #phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
         self.phase += phase_vel * (1 / SAMPLE_RATE)
         self.phase = self.phase % (2 * math.pi)
 
