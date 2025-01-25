@@ -87,5 +87,4 @@ VISUALIZE
 
 MODEL
 --------------
-* fix stuttering. WTF
 * allow pfnn to work with non batched x, and phase, for convenience
