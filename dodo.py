@@ -25,9 +25,14 @@ mocap_paths = [
     "../PFNN/data/animations/LocomotionFlat12_000.bvh",
 ]
 
-#mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
+# mocap_paths = ["../PFNN/data/animations/LocomotionFlat09_000.bvh"]
 
 mocap_names = [os.path.splitext(os.path.basename(n))[0] for n in mocap_paths]
+mirror_mocap_names = [os.path.splitext(os.path.basename(n))[0] + "_mirror" for n in mocap_paths]
+all_mocap_names = mocap_names + mirror_mocap_names
+
+for n in mocap_names:
+    print(n)
 
 
 def out_deps(basename, filenames):
@@ -42,8 +47,8 @@ def get_python_files_in_module(module_name):
             result.append(mod_name.replace(".", "/") + ".py")
     return result
 
-# mocap module is no longer used
-mocap_deps = ["math_util.py", "bvh_util.py", "skeleton.py"] # get_python_files_in_module("mocap")
+
+mocap_deps = ["math_util.py", "bvh_util.py", "skeleton.py"]
 
 
 def task_build_xforms():
@@ -57,12 +62,20 @@ def task_build_xforms():
             "actions": [f"python build_xforms.py {mocap_paths[i]}"],
             "clean": True,
         }
+        mirror_name = name + "_mirror"
+        yield {
+            "name": mirror_name,
+            "file_dep": code_deps + [mocap_paths[i]],
+            "targets": out_deps(mirror_name, ["skeleton.pkl", "xforms.npy", "root.npy"]),
+            "actions": [f"python build_xforms.py -m {mocap_paths[i]}"],
+            "clean": True,
+        }
 
 
 def task_build_jointpva():
     """Build root-space position, velocity and angles (pva) for each joint"""
     code_deps = [__file__, "build_jointpva.py"] + mocap_deps
-    for name in mocap_names:
+    for name in all_mocap_names:
         yield {
             "name": name,
             "file_dep": code_deps + out_deps(name, ["skeleton.pkl", "xforms.npy", "root.npy"]),
@@ -75,7 +88,7 @@ def task_build_jointpva():
 def task_build_traj():
     """Build root-space trajectory window around each frame."""
     code_deps = [__file__, "build_traj.py"] + mocap_deps
-    for name in mocap_names:
+    for name in all_mocap_names:
         yield {
             "name": name,
             "file_dep": code_deps + out_deps(name, ["root.npy"]),
@@ -88,7 +101,7 @@ def task_build_traj():
 def task_build_contacts():
     """Build root-space trajectory window around each frame."""
     code_deps = [__file__, "build_contacts.py"] + mocap_deps
-    for name in mocap_names:
+    for name in all_mocap_names:
         yield {
             "name": name,
             "file_dep": code_deps + out_deps(name, ["skeleton.pkl", "xforms.npy"]),
@@ -101,7 +114,7 @@ def task_build_contacts():
 def task_build_tensors():
     """Build fully normalized pytorch tensors for X, Y, P"""
     file_deps = [__file__, "build_tensors.py"] + mocap_deps
-    for name in mocap_names:
+    for name in all_mocap_names:
         file_deps += out_deps(
             name,
             [

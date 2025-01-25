@@ -107,6 +107,7 @@ if __name__ == "__main__":
 
     if mirror:
         xforms = bvh_util.mirror_xforms(skeleton, xforms)
+        outbasepath += "_mirror"
 
     root = build_root_motion(skeleton, xforms)
 

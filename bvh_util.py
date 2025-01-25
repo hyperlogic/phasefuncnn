@@ -60,5 +60,5 @@ def mirror_xforms(skeleton, xforms):
     mxforms = np.zeros(xforms.shape)
     for i in range(xforms.shape[0]):
         for j in range(xforms.shape[1]):
-            mxforms[i, skeleton.mirror_map[j]] = mat_mirror(xforms[i, j])
+            mxforms[i, skeleton.mirror_map[j]] = mu.mat_mirror(xforms[i, j])
     return mxforms
