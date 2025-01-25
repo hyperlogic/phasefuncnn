@@ -3,6 +3,7 @@ import glob
 import math
 import os
 import pickle
+from typing import Tuple
 
 import numpy as np
 from flycam import FlyCamInterface
@@ -346,6 +347,19 @@ def build_idle_output(y_lens: datalens.OutputLens) -> torch.Tensor:
         y_lens.contacts_i.set(y, i, nograd_tensor(v))
     return y
 
+def blend_trajectory(v0: torch.Tensor, v1: torch.Tensor, tau) -> torch.Tensor:
+    N = TRAJ_WINDOW_SIZE // 2
+    M = TRAJ_WINDOW_SIZE
+    t = torch.linspace(0, 1, N).unsqueeze(-1)
+
+    alpha = t ** tau
+    one_minus_alpha = 1 - alpha
+
+    result = torch.zeros(v0.shape)
+    result[0:N] = v1[0:N]
+    result[N:M] = v0[N:M] * one_minus_alpha + v1[N:M] * alpha
+    return result
+
 
 class VisOutputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
@@ -372,6 +386,8 @@ class VisOutputRenderBuddy(RenderBuddy):
     root_xform: np.ndarray
     input_traj_line: gfx.Group
     output_traj_line: gfx.Group
+    next_traj_pos: torch.Tensor
+    next_traj_dir: torch.Tensor
 
     def __init__(
         self,
@@ -432,8 +448,8 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
-        self.draw_output_trajectory = False
-        self.draw_input_trajectory = False
+        self.draw_output_trajectory = True
+        self.draw_input_trajectory = True
         self.draw_phase = True
 
         # add a line for rendering phase as a clock
@@ -457,6 +473,9 @@ class VisOutputRenderBuddy(RenderBuddy):
             gfx.LineSegmentMaterial(thickness=2, color_mode="vertex"),
         )
         self.scene.add(self.stick_line)
+
+        self.next_traj_pos = torch.zeros((TRAJ_WINDOW_SIZE, 2))
+        self.next_traj_dir = torch.zeros((TRAJ_WINDOW_SIZE, 2))
 
         self.animate_skeleton()
 
@@ -538,8 +557,10 @@ class VisOutputRenderBuddy(RenderBuddy):
             positions = []
             colors = []
             for i in range(TRAJ_WINDOW_SIZE - 1):
-                p0 = x_lens.traj_pos_i.get(x, i)
-                p1 = x_lens.traj_pos_i.get(x, i + 1)
+                #p0 = x_lens.traj_pos_i.get(x, i)
+                #p1 = x_lens.traj_pos_i.get(x, i + 1)
+                p0 = self.next_traj_pos[i]
+                p1 = self.next_traj_pos[i+1]
                 positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
                 if i % 2 == 0:
                     colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
@@ -548,8 +569,11 @@ class VisOutputRenderBuddy(RenderBuddy):
 
             # draw the directions in green
             for i in range(TRAJ_WINDOW_SIZE):
-                p0 = x_lens.traj_pos_i.get(x, i)
-                p1 = p0 + x_lens.traj_dir_i.get(x, i)
+                #p0 = x_lens.traj_pos_i.get(x, i)
+                #p1 = p0 + x_lens.traj_dir_i.get(x, i)
+                p0 = self.next_traj_pos[i]
+                p1 = p0 + self.next_traj_dir[i]
+
                 positions += [[p0[0], 0.05, p0[1]], [p1[0], 0.05, p1[1]]]
                 colors += [[0, 1, 0, 1], [0, 1, 0, 1]]
 
@@ -606,12 +630,10 @@ class VisOutputRenderBuddy(RenderBuddy):
                 self.animate_skeleton()
             self.tick_once = False
 
-    def build_input(self) -> torch.Tensor:
-        # NOTE: self.y is already unnormalized
-        root_vel = np.array([y_lens.root_vel_i.get(self.y, 0)[0], 0, y_lens.root_vel_i.get(self.y, 0)[1]])
+    def build_trajectory(self, root_vel: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        x = torch.zeros(x_lens.num_cols)
-        x = x_lens.unnormalize(x, self.x_mean, self.x_std, self.x_w)
+        traj_pos = torch.zeros((TRAJ_WINDOW_SIZE, 2))
+        traj_dir = torch.zeros((TRAJ_WINDOW_SIZE, 2))
 
         # initialize past part of traj from history_xforms
         inv_root_xform = torch.inverse(torch.from_numpy(self.root_xform.astype(np.float32)))
@@ -622,13 +644,13 @@ class VisOutputRenderBuddy(RenderBuddy):
 
             # rotate xform into root space
             xform = inv_root_xform @ self.history_xforms[cursor]
-            traj_pos = xform[:3, 3]
-            traj_dir = mu.quat_rotate(mu.quat_from_mat(xform), np.array([1, 0, 0]))
+            pos = xform[:3, 3]
+            dir = mu.quat_rotate(mu.quat_from_mat(xform), np.array([1, 0, 0]))
 
-            self.x_lens.traj_pos_i.set(x, (N - 1) - i, nograd_tensor([traj_pos[0], traj_pos[2]]))
-            self.x_lens.traj_dir_i.set(x, (N - 1) - i, nograd_tensor([traj_dir[0], traj_dir[2]]))
+            traj_pos[(N - 1) - i] = nograd_tensor([pos[0], pos[2]])
+            traj_dir[(N - 1) - i] = nograd_tensor([dir[0], dir[2]])
 
-        MOVE_SPEED = 35.5
+        MOVE_SPEED = 65.5
         ROT_SPEED = 3.15
         up = np.array([0, 1, 0])
         init_rot = mu.quat_from_angle_axis(-np.pi / 2, up)
@@ -658,15 +680,97 @@ class VisOutputRenderBuddy(RenderBuddy):
             pos = mover.pos
             dir = mu.quat_rotate(mover.rot, np.array([0, 0, -1]))
 
-            traj_pos = nograd_tensor([pos[0], pos[2]])
-            traj_dir = nograd_tensor([dir[0], dir[2]])
-
-            self.x_lens.traj_pos_i.set(x, i, traj_pos)
-            self.x_lens.traj_dir_i.set(x, i, traj_dir)
+            traj_pos[i] = nograd_tensor([pos[0], pos[2]])
+            traj_dir[i] = nograd_tensor([dir[0], dir[2]])
 
             NUM_SUBSTEPS = 10
             for i in range(NUM_SUBSTEPS):
                 mover.process(1 / (NUM_SUBSTEPS * TRAJ_SAMPLE_RATE), stick, np.array([0, 0]), 0, 0)
+
+        return traj_pos, traj_dir
+
+    def build_simple_trajectory(self, root_vel: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        traj_pos = torch.zeros((TRAJ_WINDOW_SIZE, 2))
+        traj_dir = torch.zeros((TRAJ_WINDOW_SIZE, 2))
+
+        # initialize past part of traj from history_xforms
+        inv_root_xform = torch.inverse(torch.from_numpy(self.root_xform.astype(np.float32)))
+        history_step = SAMPLE_RATE // TRAJ_SAMPLE_RATE
+        N = TRAJ_WINDOW_SIZE // 2
+        for i in range(N):
+            cursor = (self.history_cursor - (history_step * (i + 1))) % (SAMPLE_RATE * 2)
+
+            # rotate xform into root space
+            xform = inv_root_xform @ self.history_xforms[cursor]
+            pos = xform[:3, 3]
+            dir = mu.quat_rotate(mu.quat_from_mat(xform), np.array([1, 0, 0]))
+
+            traj_pos[(N - 1) - i] = nograd_tensor([pos[0], pos[2]])
+            traj_dir[(N - 1) - i] = nograd_tensor([dir[0], dir[2]])
+
+        joystick_left_stick = np.array([0, 0], dtype=np.float32)
+        if self.joystick:
+            joystick_left_stick[0] = mu.deadspot(self.joystick.get_axis(0))
+            joystick_left_stick[1] = -mu.deadspot(self.joystick.get_axis(1))
+        left_stick = left_stick = np.clip(self.left_stick + joystick_left_stick, -1, 1)
+
+        # project the stick onto the ground plane, such that up on the stick points towards the camera forward direction.
+        cam_forward = mu.quat_rotate(self.flycam.rot, np.array([0, 0, -1]))
+        theta = math.atan2(cam_forward[2], cam_forward[0])
+        c_stick = cmath.rect(1.0, theta) * complex(left_stick[1], left_stick[0])
+        world_stick = np.array([c_stick.real, 0, c_stick.imag])
+
+        # rotate stick into root frame.
+        root_stick = np.linalg.inv(self.root_xform[:3, :3]) @ world_stick
+
+        stick = np.array([root_stick[0], root_stick[2]])
+        SPEED = 120
+
+        pos = np.array([0, 0])
+        dir = np.array([0, 1])
+
+        # initialize future part of traj from the mover (controlled via joystick)
+        for i in range(TRAJ_WINDOW_SIZE // 2, TRAJ_WINDOW_SIZE):
+
+            dir = stick
+
+            traj_pos[i] = nograd_tensor([pos[0], pos[1]])
+            traj_dir[i] = nograd_tensor([dir[0], dir[1]])
+
+            pos = pos + dir * (SPEED / TRAJ_SAMPLE_RATE)
+
+        return traj_pos, traj_dir
+
+
+    def build_input(self) -> torch.Tensor:
+        # NOTE: self.y is already unnormalized
+        root_vel = np.array([y_lens.root_vel_i.get(self.y, 0)[0], 0, y_lens.root_vel_i.get(self.y, 0)[1]])
+
+        x = torch.zeros(self.x_lens.num_cols)
+        x = self.x_lens.unnormalize(x, self.x_mean, self.x_std, self.x_w)
+
+        prev_traj_pos = torch.zeros((TRAJ_WINDOW_SIZE, 2))
+        prev_traj_dir = torch.zeros((TRAJ_WINDOW_SIZE, 2))
+        for i in range(TRAJ_WINDOW_SIZE):
+            prev_traj_pos[i] = self.y_lens.traj_pos_ip1.get(x, i)
+            prev_traj_dir[i] = self.y_lens.traj_dir_ip1.get(x, i)
+
+        next_traj_pos, next_traj_dir = self.build_trajectory(root_vel)
+
+        POS_TAU = 2.0
+        traj_pos = blend_trajectory(prev_traj_pos, next_traj_pos, POS_TAU)
+
+        DIR_TAU = 0.5
+        traj_dir = blend_trajectory(prev_traj_dir, next_traj_dir, DIR_TAU)
+
+        # store for rendering
+        self.next_traj_pos = next_traj_pos
+        self.next_traj_dir = next_traj_dir
+
+        for i in range(TRAJ_WINDOW_SIZE):
+            self.x_lens.traj_pos_i.set(x, i, traj_pos[i])
+            self.x_lens.traj_dir_i.set(x, i, traj_dir[i])
 
         # TODO: blend between output trajectory and desired trajectory
 
