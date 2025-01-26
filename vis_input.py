@@ -30,18 +30,20 @@ class VisInputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
     x_lens: datalens.InputLens
     X: torch.Tensor
+    P: torch.Tensor
     row_group: gfx.Group
     row: int
     camera: gfx.PerspectiveCamera
     canvas: WgpuCanvas
     playing: bool
 
-    def __init__(self, skeleton: Skeleton, input_view: datalens.InputLens, X: torch.Tensor):
+    def __init__(self, skeleton: Skeleton, input_view: datalens.InputLens, X: torch.Tensor, P: torch.Tensor):
         super().__init__()
 
         self.skeleton = skeleton
         self.x_lens = x_lens
         self.X = X
+        self.P = P
 
         self.row_group = gfx.Group()
         self.scene.add(self.row_group)
@@ -87,6 +89,19 @@ class VisInputRenderBuddy(RenderBuddy):
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
 
+        phase = (P[row] / (2.0 * torch.pi)).float()
+        text_node = gfx.Text(
+            gfx.TextGeometry(
+                text=f"frame={row},phase={phase:.2}",
+                font_size=20,
+                screen_space=True,
+                text_align="left",
+                anchor="top-left",
+            ),
+            gfx.TextMaterial(color="#ffffff", outline_color="#000", outline_thickness=1),
+        )
+
+        self.row_group.add(text_node)
         self.row_group.add(joint_line)
         self.row_group.add(traj_line)
         self.scene.add(self.row_group)
@@ -118,6 +133,7 @@ class VisInputRenderBuddy(RenderBuddy):
             row = 0
         self.retain_row(row)
 
+
 if __name__ == "__main__":
     # unpickle skeleton
     # pick ANY skeleton in the output dir, they should all be the same.
@@ -132,10 +148,13 @@ if __name__ == "__main__":
     X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
     X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
 
+    # load phase
+    P = torch.load(os.path.join(OUTPUT_DIR, "P.pth"), weights_only=True)
+
     assert x_lens.num_cols == X.shape[1]
 
     # un-normalize input for visualization
     X = x_lens.unnormalize(X, X_mean, X_std, X_w)
 
-    render_buddy = VisInputRenderBuddy(skeleton, x_lens, X)
+    render_buddy = VisInputRenderBuddy(skeleton, x_lens, X, P)
     run()

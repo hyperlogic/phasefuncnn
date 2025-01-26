@@ -30,18 +30,20 @@ class VisOutputRenderBuddy(RenderBuddy):
     skeleton: Skeleton
     y_lens: datalens.OutputLens
     Y: torch.Tensor
+    P: torch.Tensor
     row_group: gfx.Group
     row: int
     camera: gfx.PerspectiveCamera
     canvas: WgpuCanvas
     playing: bool
 
-    def __init__(self, skeleton: Skeleton, y_lens: datalens.OutputLens, Y: torch.Tensor):
+    def __init__(self, skeleton: Skeleton, y_lens: datalens.OutputLens, Y: torch.Tensor, P: torch.Tensor):
         super().__init__()
 
         self.skeleton = skeleton
         self.y_lens = y_lens
         self.Y = Y
+        self.P = P
 
         self.skeleton_group = gfx.Group()
         self.traj_line = gfx.Group()
@@ -85,9 +87,11 @@ class VisOutputRenderBuddy(RenderBuddy):
         # apply root motion!
         root_vel = np.array([y_lens.root_vel_i.get(Y_row, 0)[0], 0, y_lens.root_vel_i.get(Y_row, 0)[1]])
         root_angvel = y_lens.root_angvel_i.get(Y_row, 0).item()
-        dt = (1 / SAMPLE_RATE)
+        dt = 1 / SAMPLE_RATE
         delta_xform = np.eye(4)
-        mu.build_mat_from_quat_pos(delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt)
+        mu.build_mat_from_quat_pos(
+            delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt
+        )
         root_xform = np.eye(4)
         mu.build_mat_from_quat_pos(root_xform, self.skeleton_group.local.rotation, self.skeleton_group.local.position)
         final_xform = root_xform @ delta_xform
@@ -109,6 +113,20 @@ class VisOutputRenderBuddy(RenderBuddy):
         traj_line = gfx.Line(
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
+
+        phase = (P[row] / (2.0 * torch.pi)).float()
+        text_node = gfx.Text(
+            gfx.TextGeometry(
+                text=f"frame={row},phase={phase:.2}",
+                font_size=20,
+                screen_space=True,
+                text_align="left",
+                anchor="top-left",
+            ),
+            gfx.TextMaterial(color="#ffffff", outline_color="#000", outline_thickness=1),
+        )
+
+        self.skeleton_group.add(text_node)
         self.skeleton_group.remove(self.traj_line)
         self.skeleton_group.add(traj_line)
         self.traj_line = traj_line
@@ -154,10 +172,13 @@ if __name__ == "__main__":
     Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
 
+    # load phase
+    P = torch.load(os.path.join(OUTPUT_DIR, "P.pth"), weights_only=True)
+
     assert y_lens.num_cols == Y.shape[1]
 
     # un-normalize input for visualiztion
     Y = y_lens.unnormalize(Y, Y_mean, Y_std)
 
-    render_buddy = VisOutputRenderBuddy(skeleton, y_lens, Y)
+    render_buddy = VisOutputRenderBuddy(skeleton, y_lens, Y, P)
     run()
