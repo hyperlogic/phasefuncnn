@@ -35,6 +35,7 @@ def add_skeleton_mesh(skeleton: Skeleton, root_node: gfx.WorldObject) -> list[gf
     BONE_VERTEX_COUNT = 6
     BONE_TRIANGLE_COUNT = 8
     bones = []
+    material = gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True)
     for joint_name in skeleton.joint_names:
         children_indices = skeleton.get_children_indices(joint_name)
         num_children = len(children_indices)
@@ -55,15 +56,20 @@ def add_skeleton_mesh(skeleton: Skeleton, root_node: gfx.WorldObject) -> list[gf
 
             # build the geometry
             geom = gfx.Geometry(positions=verts, indices=tris)
-            bone = gfx.Mesh(geom, gfx.MeshPhongMaterial(color=(0.5, 0.5, 1.0, 1.0), flat_shading=True))
+            bone = gfx.Mesh(geom, material)
 
             # set local transform, zero rot
             bone.local.position = np.array(skeleton.get_joint_offset(joint_name))
 
             bones.append(bone)
         else:
-            # this joint has no children so just create a group node. (TODO: maybe add a sphere? or a small joint?)
-            bones.append(gfx.Group())
+            # this joint has no children so just create a box node.
+            radius = 0.5
+            bone = gfx.Mesh(gfx.sphere_geometry(radius), material)
+            bone_offset = np.array(skeleton.get_joint_offset(joint_name))
+            bone_len = np.linalg.norm(bone_offset)
+            bone.local.position = (bone_offset / bone_len) * (bone_len + radius)
+            bones.append(bone)
 
     # link nodes up to their parents
     for joint_name in skeleton.joint_names:

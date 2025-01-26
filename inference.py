@@ -650,7 +650,7 @@ class VisOutputRenderBuddy(RenderBuddy):
             traj_pos[(N - 1) - i] = nograd_tensor([pos[0], pos[2]])
             traj_dir[(N - 1) - i] = nograd_tensor([dir[0], dir[2]])
 
-        MOVE_SPEED = 65.5
+        MOVE_SPEED = 320.0
         ROT_SPEED = 3.15
         up = np.array([0, 1, 0])
         init_rot = mu.quat_from_angle_axis(-np.pi / 2, up)

@@ -112,6 +112,21 @@ def build_phase(contacts: np.ndarray) -> np.ndarray:
 
     return phase
 
+def load_phase(basename: str, num_frames: int) -> np.ndarray:
+    """
+    HACK: load the phase directly from the PFNN source. because my phase computation is buggy.
+    ALSO, their code outputs phase=0 when both feet are down.
+    """
+    with open(os.path.join("../PFNN/data/animations", basename + ".phase"), "r") as f:
+        lines = f.readlines()
+
+    two_pi = 2.0 * math.pi
+    values = [float(line.strip()) * two_pi for line in lines]
+
+    # HACK: SAMPLE_RATE is 1/2 of the mocap.  so skip every other sample
+    values = [values[i] for i in range(0, len(values) - 1, 2)]
+    assert len(values) == num_frames, f"{len(values)} expected {num_frames}"
+    return np.array(values, dtype=np.float32)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -126,7 +141,10 @@ if __name__ == "__main__":
     xforms = np.load(outbasepath + "_xforms.npy")
 
     contacts = build_contacts(skeleton, xforms)
-    phase = build_phase(contacts)
+    # AJT: HACK use PFNN phase instead of our calculation
+    #phase = build_phase(contacts)
+    num_frames = xforms.shape[0]
+    phase = load_phase(mocap_basename, num_frames)
 
     # save contacts, phase
     np.save(outbasepath + "_contacts.npy", contacts)
