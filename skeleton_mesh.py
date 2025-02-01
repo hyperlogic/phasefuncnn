@@ -67,7 +67,7 @@ def add_skeleton_mesh(skeleton: Skeleton, root_node: gfx.WorldObject) -> list[gf
             radius = 0.5
             bone = gfx.Mesh(gfx.sphere_geometry(radius), material)
             bone_offset = np.array(skeleton.get_joint_offset(joint_name))
-            bone_len = np.linalg.norm(bone_offset)
+            bone_len = max(np.linalg.norm(bone_offset), 0.001)
             bone.local.position = (bone_offset / bone_len) * (bone_len + radius)
             bones.append(bone)
 

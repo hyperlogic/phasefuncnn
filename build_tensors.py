@@ -112,18 +112,22 @@ if __name__ == "__main__":
     Y = torch.tensor([], dtype=torch.float32, requires_grad=False)
     P = torch.tensor([], dtype=torch.float32, requires_grad=False)
     num_joints = 0
-    for i in range(len(sys.argv) - 1):
+    num_anims = len(snakemake.input.skeleton_list)
+    assert num_anims > 0
+    for i in range(num_anims):
 
         skeleton = unpickle_obj(snakemake.input.skeleton_list[i])
         root = np.load(snakemake.input.root_list[i])
         jointpva = np.load(snakemake.input.jointpva_list[i])
         traj = np.load(snakemake.input.traj_list[i])
         contacts = np.load(snakemake.input.contacts_list[i])
-        phase = np.load(snamemake.input.phase_list[i])
+        phase = np.load(snakemake.input.phase_list[i])
         rootvel = np.load(snakemake.input.rootvel_list[i])
 
         num_frames = root.shape[0]
         num_joints = skeleton.num_joints
+        x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, num_joints)
+        y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, num_joints)
 
         print(f"    num_frames = {num_frames}")
         print(f"    num_joints = {num_joints}")
@@ -165,6 +169,9 @@ if __name__ == "__main__":
         assert x.shape[0] == y.shape[0]
         assert y.shape[0] == p.shape[0]
 
+        assert x.shape[1] == x_lens.num_cols
+        assert y.shape[1] == y_lens.num_cols
+
         if i == 0:
             X = x
             Y = y
@@ -174,6 +181,9 @@ if __name__ == "__main__":
             X = torch.cat((X, x), dim=0)
             Y = torch.cat((Y, y), dim=0)
             P = torch.cat((P, p), dim=0)
+
+            assert X.shape[1] == x_lens.num_cols
+            assert Y.shape[1] == y_lens.num_cols
 
     traj_size = TRAJ_WINDOW_SIZE * 4
     jointpv_size = num_joints * 6

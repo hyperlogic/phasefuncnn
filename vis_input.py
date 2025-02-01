@@ -16,7 +16,7 @@ import math_util as mu
 from skeleton import Skeleton
 from renderbuddy import RenderBuddy
 
-OUTPUT_DIR = "output"
+OUTPUT_DIR = "pipeline/output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 
@@ -137,19 +137,19 @@ class VisInputRenderBuddy(RenderBuddy):
 if __name__ == "__main__":
     # unpickle skeleton
     # pick ANY skeleton in the output dir, they should all be the same.
-    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "*_skeleton.pkl"))
+    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "skeleton/*.pkl"))
     assert len(skeleton_files) > 0, "could not find any pickled skeletons in output folder"
     skeleton = unpickle_obj(skeleton_files[0])
 
     # load input
     x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
-    X = torch.load(os.path.join(OUTPUT_DIR, "X.pth"), weights_only=True)
-    X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True)
-    X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
-    X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
+    X = torch.load(os.path.join(OUTPUT_DIR, "tensors/X.pth"), weights_only=True)
+    X_mean = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_mean.pth"), weights_only=True)
+    X_std = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_std.pth"), weights_only=True)
+    X_w = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_w.pth"), weights_only=True)
 
     # load phase
-    P = torch.load(os.path.join(OUTPUT_DIR, "P.pth"), weights_only=True)
+    P = torch.load(os.path.join(OUTPUT_DIR, "tensors/P.pth"), weights_only=True)
 
     assert x_lens.num_cols == X.shape[1]
 

@@ -15,7 +15,7 @@ import skeleton_mesh
 from renderbuddy import RenderBuddy
 from skeleton import Skeleton
 
-OUTPUT_DIR = "output"
+OUTPUT_DIR = "pipeline/output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 SAMPLE_RATE = 60
@@ -162,18 +162,18 @@ class VisOutputRenderBuddy(RenderBuddy):
 if __name__ == "__main__":
     # unpickle skeleton
     # pick ANY skeleton in the output dir, they should all be the same.
-    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "*_skeleton.pkl"))
+    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "skeleton/*.pkl"))
     assert len(skeleton_files) > 0, "could not find any pickled skeletons in output folder"
     skeleton = unpickle_obj(skeleton_files[0])
 
     # load output
     y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
-    Y = torch.load(os.path.join(OUTPUT_DIR, "Y.pth"), weights_only=True)
-    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
-    Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
+    Y = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y.pth"), weights_only=True)
+    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y_mean.pth"), weights_only=True)
+    Y_std = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y_std.pth"), weights_only=True)
 
     # load phase
-    P = torch.load(os.path.join(OUTPUT_DIR, "P.pth"), weights_only=True)
+    P = torch.load(os.path.join(OUTPUT_DIR, "tensors/P.pth"), weights_only=True)
 
     assert y_lens.num_cols == Y.shape[1]
 

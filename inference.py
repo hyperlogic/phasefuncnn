@@ -21,7 +21,9 @@ from pfnn import PFNN
 from renderbuddy import RenderBuddy
 from skeleton import Skeleton
 
-OUTPUT_DIR = "output"
+PIPELINE_DIR = "pipeline/output"
+TRAINING_DIR = "output"
+
 TRAJ_WINDOW_SIZE = 12
 TRAJ_SAMPLE_RATE = 6
 SAMPLE_RATE = 60
@@ -825,7 +827,7 @@ if __name__ == "__main__":
 
     # unpickle skeleton
     # pick ANY skeleton in the output dir, they should all be the same.
-    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "*_skeleton.pkl"))
+    skeleton_files = glob.glob(os.path.join(PIPELINE_DIR, "skeleton/*.pkl"))
     assert len(skeleton_files) > 0, "could not find any pickled skeletons in output folder"
     skeleton = unpickle_obj(skeleton_files[0])
 
@@ -847,18 +849,18 @@ if __name__ == "__main__":
     print(f"PFNN(in_features = {in_features}, out_features = {out_features}, device = {device}")
     model = PFNN(in_features, out_features, device=device)
     model.eval()  # deactivate dropout
-    state_dict = torch.load(os.path.join(OUTPUT_DIR, "final_checkpoint.pth"), weights_only=False)
+    state_dict = torch.load(os.path.join(TRAINING_DIR, "final_checkpoint.pth"), weights_only=False)
 
     model.load_state_dict(state_dict)
 
     # load input mean, std and weights. used to unnormalize the inputs
-    X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True)
-    X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
-    X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
+    X_mean = torch.load(os.path.join(PIPELINE_DIR, "tensors/X_mean.pth"), weights_only=True)
+    X_std = torch.load(os.path.join(PIPELINE_DIR, "tensors/X_std.pth"), weights_only=True)
+    X_w = torch.load(os.path.join(PIPELINE_DIR, "tensors/X_w.pth"), weights_only=True)
 
     # load output mean and std. used to unnormalize the outputs
-    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
-    Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
+    Y_mean = torch.load(os.path.join(PIPELINE_DIR, "tensors/Y_mean.pth"), weights_only=True)
+    Y_std = torch.load(os.path.join(PIPELINE_DIR, "tensors/Y_std.pth"), weights_only=True)
 
     render_buddy = VisOutputRenderBuddy(
         skeleton, x_lens, y_lens, model, Y_mean, Y_std, X_mean, X_std, X_w

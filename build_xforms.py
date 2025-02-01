@@ -82,6 +82,9 @@ def build_root_motion(skeleton: Skeleton, xforms: np.ndarray) -> np.ndarray:
 
 
 if __name__ == "__main__":
+
+    mirror = snakemake.params.mirror
+
     print(f"Loading {snakemake.input.bvh}")
     with open(snakemake.input.bvh) as f:
         bvh = Bvh(f.read())
@@ -91,11 +94,8 @@ if __name__ == "__main__":
 
     xforms = bvh_util.build_xforms_from_bvh(bvh, skeleton, SAMPLE_RATE)
 
-    """
     if mirror:
         xforms = bvh_util.mirror_xforms(skeleton, xforms)
-        outbasepath += "_mirror"
-    """
 
     root = build_root_motion(skeleton, xforms)
 

@@ -1,12 +1,29 @@
-# this is my Snakefile
 import pathlib
-
-# first rule build skeleton.pkl, xforms.npy, root.npy from mocap.bvh
 
 BVH_DIR = pathlib.Path("../../PFNN/data/animations")
 OUTPUT_DIR = pathlib.Path("output")
 
-ANIMS = ["LocomotionFlat01_000", "LocomotionFlat02_000"]
+ORIG_ANIMS = [
+    "LocomotionFlat01_000",
+    "LocomotionFlat02_000",
+    "LocomotionFlat02_001",
+    "LocomotionFlat03_000",
+    "LocomotionFlat04_000",
+    "LocomotionFlat05_000",
+    "LocomotionFlat06_000",
+    "LocomotionFlat06_001",
+    "LocomotionFlat07_000",
+    "LocomotionFlat08_000",
+    "LocomotionFlat08_001",
+    "LocomotionFlat09_000",
+    "LocomotionFlat10_000",
+    "LocomotionFlat11_000",
+    "LocomotionFlat12_000",
+]
+
+ANIMS = ORIG_ANIMS + [anim + "_mirror" for anim in ORIG_ANIMS]
+
+ruleorder: build_mirror_xforms > build_xforms
 
 rule all:
     input:
@@ -27,6 +44,21 @@ rule build_xforms:
         skeleton=OUTPUT_DIR / "skeleton/{anim}.pkl",
         xforms=OUTPUT_DIR / "xforms/{anim}.npy",
         root=OUTPUT_DIR / "root/{anim}.npy",
+    params:
+        mirror=False
+    script:
+        "../build_xforms.py"
+
+
+rule build_mirror_xforms:
+    input:
+        bvh=BVH_DIR / "{anim}.bvh"
+    output:
+        skeleton=OUTPUT_DIR / "skeleton/{anim}_mirror.pkl",
+        xforms=OUTPUT_DIR / "xforms/{anim}_mirror.npy",
+        root=OUTPUT_DIR / "root/{anim}_mirror.npy",
+    params:
+        mirror=True
     script:
         "../build_xforms.py"
 
