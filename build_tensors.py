@@ -102,28 +102,29 @@ def build_tensors(
 
 
 if __name__ == "__main__":
+    """
     if len(sys.argv) < 2:
         print("Error: expected list of mocap filenames (without .bvh extension)")
         exit(1)
+    """
 
     X = torch.tensor([], dtype=torch.float32, requires_grad=False)
     Y = torch.tensor([], dtype=torch.float32, requires_grad=False)
     P = torch.tensor([], dtype=torch.float32, requires_grad=False)
     num_joints = 0
     for i in range(len(sys.argv) - 1):
-        outbasepath = os.path.join(OUTPUT_DIR, sys.argv[i + 1])
-        skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
-        root = np.load(outbasepath + "_root.npy")
-        jointpva = np.load(outbasepath + "_jointpva.npy")
-        traj = np.load(outbasepath + "_traj.npy")
-        contacts = np.load(outbasepath + "_contacts.npy")
-        phase = np.load(outbasepath + "_phase.npy")
-        rootvel = np.load(outbasepath + "_rootvel.npy")
+
+        skeleton = unpickle_obj(snakemake.input.skeleton_list[i])
+        root = np.load(snakemake.input.root_list[i])
+        jointpva = np.load(snakemake.input.jointpva_list[i])
+        traj = np.load(snakemake.input.traj_list[i])
+        contacts = np.load(snakemake.input.contacts_list[i])
+        phase = np.load(snamemake.input.phase_list[i])
+        rootvel = np.load(snakemake.input.rootvel_list[i])
 
         num_frames = root.shape[0]
         num_joints = skeleton.num_joints
 
-        print(outbasepath)
         print(f"    num_frames = {num_frames}")
         print(f"    num_joints = {num_joints}")
         print(f"    root.shape = {root.shape}")
@@ -203,13 +204,13 @@ if __name__ == "__main__":
     assert torch.isnan(X).sum().item() == 0
     assert torch.isnan(Y).sum().item() == 0
 
-    torch.save(X, os.path.join(OUTPUT_DIR, "X.pth"))
-    torch.save(X_mean, os.path.join(OUTPUT_DIR, "X_mean.pth"))
-    torch.save(X_std, os.path.join(OUTPUT_DIR, "X_std.pth"))
-    torch.save(X_w, os.path.join(OUTPUT_DIR, "X_w.pth"))
+    torch.save(X, snakemake.output.x)
+    torch.save(X_mean, snakemake.output.x_mean)
+    torch.save(X_std, snakemake.output.x_std)
+    torch.save(X_w, snakemake.output.x_w)
 
-    torch.save(Y, os.path.join(OUTPUT_DIR, "Y.pth"))
-    torch.save(Y_mean, os.path.join(OUTPUT_DIR, "Y_mean.pth"))
-    torch.save(Y_std, os.path.join(OUTPUT_DIR, "Y_std.pth"))
+    torch.save(Y, snakemake.output.y)
+    torch.save(Y_mean, snakemake.output.y_mean)
+    torch.save(Y_std, snakemake.output.y_std)
 
-    torch.save(P, os.path.join(OUTPUT_DIR, "P.pth"))
+    torch.save(P, snakemake.output.p)

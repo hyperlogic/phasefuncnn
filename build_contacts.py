@@ -129,23 +129,18 @@ def load_phase(basename: str, num_frames: int) -> np.ndarray:
     return np.array(values, dtype=np.float32)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Error: expected mocap filename (without .bvh extension)")
-        exit(1)
-
-    mocap_basename = sys.argv[1]
-    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
 
     # unpickle skeleton and xforms
-    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
-    xforms = np.load(outbasepath + "_xforms.npy")
+    skeleton = unpickle_obj(snakemake.input.skeleton)
+    xforms = np.load(snakemake.input.xforms)
 
     contacts = build_contacts(skeleton, xforms)
+    phase = build_phase(contacts)
+
     # AJT: HACK use PFNN phase instead of our calculation
-    #phase = build_phase(contacts)
-    num_frames = xforms.shape[0]
-    phase = load_phase(mocap_basename, num_frames)
+    # num_frames = xforms.shape[0]
+    # phase = load_phase(mocap_basename, num_frames)
 
     # save contacts, phase
-    np.save(outbasepath + "_contacts.npy", contacts)
-    np.save(outbasepath + "_phase.npy", phase)
+    np.save(snakemake.output.contacts, contacts)
+    np.save(snakemake.output.phase, phase)

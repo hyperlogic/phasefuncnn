@@ -82,22 +82,8 @@ def build_root_motion(skeleton: Skeleton, xforms: np.ndarray) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or len(sys.argv) > 3:
-        print("Error: expected bvh file argument, or -m flag")
-        exit(1)
-
-    if sys.argv[1] == "-m":
-        mirror = True
-        mocap_filename = sys.argv[2]
-    else:
-        mirror = False
-        mocap_filename = sys.argv[1]
-
-    mocap_basename = os.path.splitext(os.path.basename(mocap_filename))[0]
-    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
-
-    print(f"Loading {mocap_filename}")
-    with open(mocap_filename) as f:
+    print(f"Loading {snakemake.input.bvh}")
+    with open(snakemake.input.bvh) as f:
         bvh = Bvh(f.read())
 
     skeleton = Skeleton(bvh)
@@ -105,16 +91,14 @@ if __name__ == "__main__":
 
     xforms = bvh_util.build_xforms_from_bvh(bvh, skeleton, SAMPLE_RATE)
 
+    """
     if mirror:
         xforms = bvh_util.mirror_xforms(skeleton, xforms)
         outbasepath += "_mirror"
+    """
 
     root = build_root_motion(skeleton, xforms)
 
-    # create output dir
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    # pickle skeleton, xforms
-    pickle_obj(outbasepath + "_skeleton.pkl", skeleton)
-    np.save(outbasepath + "_xforms.npy", xforms)
-    np.save(outbasepath + "_root.npy", root)
+    pickle_obj(snakemake.output.skeleton, skeleton)
+    np.save(snakemake.output.xforms, xforms)
+    np.save(snakemake.output.root, root)

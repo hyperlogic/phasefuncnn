@@ -59,20 +59,22 @@ def build_jointpva(skeleton: Skeleton, xforms: np.ndarray, root: np.ndarray) -> 
 
 
 if __name__ == "__main__":
+    """
     if len(sys.argv) != 2:
         print("Error: expected mocap filename (without .bvh extension)")
         exit(1)
 
     mocap_basename = sys.argv[1]
     outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
+    """
 
     # unpickle skeleton, xforms
-    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
-    xforms = np.load(outbasepath + "_xforms.npy")
-    root = np.load(outbasepath + "_root.npy")
+    skeleton = unpickle_obj(snakemake.input.skeleton)
+    xforms = np.load(snakemake.input.xforms)
+    root = np.load(snakemake.input.root)
 
     # build joint pos, vel, and angle
     jointpva_array = build_jointpva(skeleton, xforms, root)
 
     # save jointpva_array
-    np.save(outbasepath + "_jointpva.npy", jointpva_array)
+    np.save(snakemake.output.jointpva, jointpva_array)

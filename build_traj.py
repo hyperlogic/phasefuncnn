@@ -81,21 +81,14 @@ def build_rootvel(root: np.ndarray) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Error: expected mocap filename (without .bvh extension)")
-        exit(1)
-
-    mocap_basename = sys.argv[1]
-    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
-
     # load root xforms
-    root = np.load(outbasepath + "_root.npy")
+    root = np.load(snakemake.input.root)
 
     traj_array = build_traj(root)
     rootvel = build_rootvel(root)
 
     # save traj
-    np.save(outbasepath + "_traj.npy", traj_array)
+    np.save(snakemake.output.traj, traj_array)
 
     # save rootvel
-    np.save(outbasepath + "_rootvel.npy", rootvel)
+    np.save(snakemake.output.rootvel, rootvel)

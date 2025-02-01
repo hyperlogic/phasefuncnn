@@ -1,0 +1,85 @@
+# this is my Snakefile
+import pathlib
+
+# first rule build skeleton.pkl, xforms.npy, root.npy from mocap.bvh
+
+BVH_DIR = pathlib.Path("../../PFNN/data/animations")
+OUTPUT_DIR = pathlib.Path("output")
+
+ANIMS = ["LocomotionFlat01_000", "LocomotionFlat02_000"]
+
+rule all:
+    input:
+        OUTPUT_DIR / "tensors/X.pth",
+        OUTPUT_DIR / "tensors/X_mean.pth",
+        OUTPUT_DIR / "tensors/X_std.pth",
+        OUTPUT_DIR / "tensors/X_w.pth",
+        OUTPUT_DIR / "tensors/Y.pth",
+        OUTPUT_DIR / "tensors/Y_mean.pth",
+        OUTPUT_DIR / "tensors/Y_std.pth",
+        OUTPUT_DIR / "tensors/P.pth",
+
+
+rule build_xforms:
+    input:
+        bvh=BVH_DIR / "{anim}.bvh"
+    output:
+        skeleton=OUTPUT_DIR / "skeleton/{anim}.pkl",
+        xforms=OUTPUT_DIR / "xforms/{anim}.npy",
+        root=OUTPUT_DIR / "root/{anim}.npy",
+    script:
+        "../build_xforms.py"
+
+
+rule build_jointpva:
+    input:
+        skeleton=OUTPUT_DIR / "skeleton/{anim}.pkl",
+        xforms=OUTPUT_DIR / "xforms/{anim}.npy",
+        root=OUTPUT_DIR / "root/{anim}.npy",
+    output:
+        jointpva=OUTPUT_DIR / "jointpva/{anim}.npy"
+    script:
+        "../build_jointpva.py"
+
+
+rule build_traj:
+     input:
+        root=OUTPUT_DIR / "root/{anim}.npy"
+     output:
+        traj=OUTPUT_DIR / "traj/{anim}.npy",
+        rootvel=OUTPUT_DIR / "rootvel/{anim}.npy"
+     script:
+        "../build_traj.py"
+
+
+rule build_contacts:
+    input:
+        skeleton=OUTPUT_DIR / "skeleton/{anim}.pkl",
+        xforms=OUTPUT_DIR / "xforms/{anim}.npy",
+    output:
+        contacts=OUTPUT_DIR / "contacts/{anim}.npy",
+        phase=OUTPUT_DIR / "phase/{anim}.npy",
+    script:
+        "../build_contacts.py"
+
+
+rule build_tensors:
+    input:
+        skeleton_list=expand(OUTPUT_DIR / "skeleton/{anim}.pkl", anim=ANIMS),
+        root_list=expand(OUTPUT_DIR / "root/{anim}.npy", anim=ANIMS),
+        jointpva_list=expand(OUTPUT_DIR / "jointpva/{anim}.npy", anim=ANIMS),
+        traj_list=expand(OUTPUT_DIR / "traj/{anim}.npy", anim=ANIMS),
+        contacts_list=expand(OUTPUT_DIR / "contacts/{anim}.npy", anim=ANIMS),
+        phase_list=expand(OUTPUT_DIR / "phase/{anim}.npy", anim=ANIMS),
+        rootvel_list=expand(OUTPUT_DIR / "rootvel/{anim}.npy", anim=ANIMS),
+    output:
+        x=OUTPUT_DIR / "tensors/X.pth",
+        x_mean=OUTPUT_DIR / "tensors/X_mean.pth",
+        x_std=OUTPUT_DIR / "tensors/X_std.pth",
+        x_w=OUTPUT_DIR / "tensors/X_w.pth",
+        y=OUTPUT_DIR / "tensors/Y.pth",
+        y_mean=OUTPUT_DIR / "tensors/Y_mean.pth",
+        y_std=OUTPUT_DIR / "tensors/Y_std.pth",
+        p=OUTPUT_DIR / "tensors/P.pth",
+    script:
+        "../build_tensors.py"
