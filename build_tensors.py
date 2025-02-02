@@ -101,139 +101,50 @@ def build_tensors(
 
 if __name__ == "__main__":
 
-    num_anims = len(snakemake.input.skeleton_list)
-    assert num_anims > 0
-    skeleton = unpickle_obj(snakemake.input.skeleton_list[0])
+    skeleton = unpickle_obj(snakemake.input.skeleton)
     num_joints = skeleton.num_joints
+
     x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, num_joints)
     y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, num_joints)
 
-    total_frames = 0
-    for i in range(num_anims):
-        phase = np.load(snakemake.input.phase_list[i])
-        total_frames += (phase.shape[0]) - 2  # skip first and last frame
+    root = np.load(snakemake.input.root)
+    jointpva = np.load(snakemake.input.jointpva)
+    traj = np.load(snakemake.input.traj)
+    rootvel = np.load(snakemake.input.rootvel)
+    contacts = np.load(snakemake.input.contacts)
+    phase = np.load(snakemake.input.phase)
+    gait = np.load(snakemake.input.gait)
 
-    X = torch.empty((total_frames, x_lens.num_cols), dtype=torch.float32)
-    Y = torch.empty((total_frames, y_lens.num_cols), dtype=torch.float32)
-    P = torch.empty((total_frames,), dtype=torch.float32)
+    num_frames = phase.shape[0]
 
-    print(f"X.shape = {X.shape}")
-    print(f"Y.shape = {Y.shape}")
-    print(f"P.shape = {P.shape}")
+    # verify data shapes
+    assert root.shape == (num_frames, 4, 4)
+    assert jointpva.shape == (num_frames, num_joints, 9)  # (px, py, pz, vx, vy, vz, ax, ay, az)
+    assert traj.shape == (num_frames, TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE)
+    assert rootvel.shape == (num_frames, 3)  # (vx, vz, angvel)
+    assert contacts.shape == (num_frames, 4)  # (lfoot, rfoot, ltoe, rtoe)
+    assert phase.shape == (num_frames,)
+    assert gait.shape == (num_frames, NUM_GAITS)  # (idle, walk, jog, run, crouch, jump, crawl, unknown)
 
-    curr_start = 0
-    for i in range(num_anims):
+    # convert into tensors
+    root = torch.from_numpy(root)
+    jointpva = torch.from_numpy(jointpva)
+    traj = torch.from_numpy(traj)
+    rootvel = torch.from_numpy(rootvel)
+    contacts = torch.from_numpy(contacts)
+    phase = torch.from_numpy(phase)
+    gait = torch.from_numpy(gait)
 
-        skeleton = unpickle_obj(snakemake.input.skeleton_list[i])
-        root = np.load(snakemake.input.root_list[i])
-        jointpva = np.load(snakemake.input.jointpva_list[i])
-        traj = np.load(snakemake.input.traj_list[i])
-        rootvel = np.load(snakemake.input.rootvel_list[i])
-        contacts = np.load(snakemake.input.contacts_list[i])
-        phase = np.load(snakemake.input.phase_list[i])
-        gait = np.load(snakemake.input.gait_list[i])
+    x, y = build_tensors(skeleton, root, jointpva, traj, rootvel, contacts, phase, gait)
 
-        num_frames = root.shape[0]
-        assert num_joints == skeleton.num_joints
+    assert x.shape == (num_frames - 2, x_lens.num_cols)
+    assert y.shape == (num_frames - 2, y_lens.num_cols)
 
-        print(f"    num_frames = {num_frames}")
-        print(f"    num_joints = {num_joints}")
-        print(f"    root.shape = {root.shape}")
-        print(f"    jointpva.shape = {jointpva.shape}")
-        print(f"    traj.shape = {traj.shape}")
-        print(f"    rootvel.shape = {rootvel.shape}")
-        print(f"    contacts.shape = {contacts.shape}")
-        print(f"    phase.shape = {phase.shape}")
-        print(f"    gait.shape = {gait.shape}")
+    p = phase[1:-1]  # also skip the first and last frame, to match x, y
+    assert p.shape == (num_frames - 2,)
 
-        # verify data shapes
-        assert root.shape == (num_frames, 4, 4)
-        assert jointpva.shape == (num_frames, num_joints, 9)  # (px, py, pz, vx, vy, vz, ax, ay, az)
-        assert traj.shape == (num_frames, TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE)
-        assert rootvel.shape == (num_frames, 3)  # (vx, vz, angvel)
-        assert contacts.shape == (num_frames, 4)  # (lfoot, rfoot, ltoe, rtoe)
-        assert phase.shape == (num_frames,)
-        assert gait.shape == (num_frames, NUM_GAITS)  # (idle, walk, jog, run, crouch, jump, crawl, unknown)
+    print(f"x.shape = {x.shape}, y.shape = {y.shape}, p.shape = {p.shape}")
 
-        # convert into tensors
-        root = torch.from_numpy(root)
-        jointpva = torch.from_numpy(jointpva)
-        traj = torch.from_numpy(traj)
-        rootvel = torch.from_numpy(rootvel)
-        contacts = torch.from_numpy(contacts)
-        phase = torch.from_numpy(phase)
-        gait = torch.from_numpy(gait)
-
-        x, y = build_tensors(skeleton, root, jointpva, traj, rootvel, contacts, phase, gait)
-
-        assert x.shape == (num_frames - 2, x_lens.num_cols)
-        assert y.shape == (num_frames - 2, y_lens.num_cols)
-
-        p = phase[1:-1]  # also skip the first and last frame, to match x, y
-        assert p.shape == (num_frames - 2,)
-
-        print(f"    x.shape = {x.shape}")
-        print(f"    y.shape = {y.shape}")
-        print(f"    p.shape = {p.shape}")
-
-        next_start = curr_start + num_frames - 2  # first and last frame are removed
-
-        X[curr_start:next_start] = x
-        Y[curr_start:next_start] = y
-        P[curr_start:next_start] = p
-
-        curr_start = next_start
-
-    assert curr_start == total_frames
-
-    # use weights to reduce the importance of input joint features by a scale factor
-    X_w = torch.ones((X.shape[1],))
-    jweight = torch.ones((3,)) * JOINT_IMPORTANCE_SCALE
-    for i in range(num_joints):
-        x_lens.joint_pos_im1.set(X_w, i, jweight)
-        x_lens.joint_vel_im1.set(X_w, i, jweight)
-
-    X_mean, Y_mean = X.mean(dim=0), Y.mean(dim=0)
-
-    # Add a small epsilon to std deviation to avoid division by zero
-    epsilon = 1e-8
-    X_std, Y_std = X.std(dim=0) + epsilon, Y.std(dim=0) + epsilon
-
-    # don't apply normalization to the one hot gait vectors.
-    x_lens.gait_i.set(X_mean, 0, torch.zeros((NUM_GAITS,)))
-    x_lens.gait_i.set(X_std, 0, torch.ones((NUM_GAITS,)))
-
-    # normalize and weight the importance of each feature
-    X = (X - X_mean) * (X_w / X_std)
-    Y = (Y - Y_mean) / Y_std
-
-    print(f"X.shape = {X.shape}, X_mean.shape = {X_mean.shape}, X_std.shape = {X_std.shape}")
-    print(f"X_mean = {X_mean}")
-    print(f"X_std = {X_std}")
-    print(f"X_w = {X_w}")
-    print(f"Y.shape = {Y.shape}, Y_mean.shape = {Y_mean.shape}, Y_std.shape = {Y_std.shape}")
-    print(f"Y.mean = {Y_mean}")
-    print(f"Y.std = {Y_std}")
-    print(f"P.shape = {P.shape}")
-
-    assert not torch.isnan(X).any()
-    assert not torch.isnan(X_mean).any()
-    assert not torch.isnan(X_std).any()
-    assert not torch.isnan(X_w).any()
-
-    assert not torch.isnan(Y).any()
-    assert not torch.isnan(Y_mean).any()
-    assert not torch.isnan(Y_std).any()
-
-    assert not torch.isnan(P).any()
-
-    torch.save(X, snakemake.output.x)
-    torch.save(X_mean, snakemake.output.x_mean)
-    torch.save(X_std, snakemake.output.x_std)
-    torch.save(X_w, snakemake.output.x_w)
-
-    torch.save(Y, snakemake.output.y)
-    torch.save(Y_mean, snakemake.output.y_mean)
-    torch.save(Y_std, snakemake.output.y_std)
-
-    torch.save(P, snakemake.output.p)
+    torch.save(x, snakemake.output.x)
+    torch.save(y, snakemake.output.y)
+    torch.save(p, snakemake.output.p)

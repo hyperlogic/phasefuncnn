@@ -43,14 +43,14 @@ rule all:
 
 rule train:
     input:
-        OUTPUT_DIR / "tensors/X.pth",
-        OUTPUT_DIR / "tensors/X_mean.pth",
-        OUTPUT_DIR / "tensors/X_std.pth",
-        OUTPUT_DIR / "tensors/X_w.pth",
-        OUTPUT_DIR / "tensors/Y.pth",
-        OUTPUT_DIR / "tensors/Y_mean.pth",
-        OUTPUT_DIR / "tensors/Y_std.pth",
-        OUTPUT_DIR / "tensors/P.pth",
+        OUTPUT_DIR / "X.pth",
+        OUTPUT_DIR / "X_mean.pth",
+        OUTPUT_DIR / "X_std.pth",
+        OUTPUT_DIR / "X_w.pth",
+        OUTPUT_DIR / "Y.pth",
+        OUTPUT_DIR / "Y_mean.pth",
+        OUTPUT_DIR / "Y_std.pth",
+        OUTPUT_DIR / "P.pth",
         script="train.py",
     output:
         OUTPUT_DIR / "final_checkpoint.pth"
@@ -108,22 +108,36 @@ rule build_contacts:
 
 rule build_tensors:
     input:
-        skeleton_list=expand(OUTPUT_DIR / "skeleton/{anim}.pkl", anim=ANIMS),
-        root_list=expand(OUTPUT_DIR / "root/{anim}.npy", anim=ANIMS),
-        jointpva_list=expand(OUTPUT_DIR / "jointpva/{anim}.npy", anim=ANIMS),
-        traj_list=expand(OUTPUT_DIR / "traj/{anim}.npy", anim=ANIMS),
-        rootvel_list=expand(OUTPUT_DIR / "rootvel/{anim}.npy", anim=ANIMS),
-        contacts_list=expand(OUTPUT_DIR / "contacts/{anim}.npy", anim=ANIMS),
-        phase_list=expand(OUTPUT_DIR / "phase/{anim}.npy", anim=ANIMS),
-        gait_list=expand(OUTPUT_DIR / "gait/{anim}.npy", anim=ANIMS),
+        skeleton=OUTPUT_DIR / "skeleton/{anim}.pkl",
+        root=OUTPUT_DIR / "root/{anim}.npy",
+        jointpva=OUTPUT_DIR / "jointpva/{anim}.npy",
+        traj=OUTPUT_DIR / "traj/{anim}.npy",
+        rootvel=OUTPUT_DIR / "rootvel/{anim}.npy",
+        contacts=OUTPUT_DIR / "contacts/{anim}.npy",
+        phase=OUTPUT_DIR / "phase/{anim}.npy",
+        gait=OUTPUT_DIR / "gait/{anim}.npy",
     output:
-        x=OUTPUT_DIR / "tensors/X.pth",
-        x_mean=OUTPUT_DIR / "tensors/X_mean.pth",
-        x_std=OUTPUT_DIR / "tensors/X_std.pth",
-        x_w=OUTPUT_DIR / "tensors/X_w.pth",
-        y=OUTPUT_DIR / "tensors/Y.pth",
-        y_mean=OUTPUT_DIR / "tensors/Y_mean.pth",
-        y_std=OUTPUT_DIR / "tensors/Y_std.pth",
-        p=OUTPUT_DIR / "tensors/P.pth",
+        x=OUTPUT_DIR / "tensors/{anim}_x.pth",
+        y=OUTPUT_DIR / "tensors/{anim}_y.pth",
+        p=OUTPUT_DIR / "tensors/{anim}_p.pth",
     script:
         "build_tensors.py"
+
+
+rule normalize_tensors:
+    input:
+        skeleton_list=expand(OUTPUT_DIR / "skeleton/{anim}.pkl", anim=ANIMS),
+        x_list=expand(OUTPUT_DIR / "tensors/{anim}_x.pth", anim=ANIMS),
+        y_list=expand(OUTPUT_DIR / "tensors/{anim}_y.pth", anim=ANIMS),
+        p_list=expand(OUTPUT_DIR / "tensors/{anim}_p.pth", anim=ANIMS),
+    output:
+        x=OUTPUT_DIR / "X.pth",
+        x_mean=OUTPUT_DIR / "X_mean.pth",
+        x_std=OUTPUT_DIR / "X_std.pth",
+        x_w=OUTPUT_DIR / "X_w.pth",
+        y=OUTPUT_DIR / "Y.pth",
+        y_mean=OUTPUT_DIR / "Y_mean.pth",
+        y_std=OUTPUT_DIR / "Y_std.pth",
+        p=OUTPUT_DIR / "P.pth",
+    script:
+        "normalize_tensors.py"

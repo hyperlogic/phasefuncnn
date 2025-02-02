@@ -20,9 +20,9 @@ TRAJ_ELEMENT_SIZE = 4
 class MocapDataset(torch.utils.data.Dataset):
     def __init__(self):
         # unpickle skeleton, xforms, jointpva
-        self.X = torch.load(OUTPUT_DIR / "tensors/X.pth", weights_only=True)
-        self.Y = torch.load(OUTPUT_DIR / "tensors/Y.pth", weights_only=True)
-        self.P = torch.load(OUTPUT_DIR / "tensors/P.pth", weights_only=True)
+        self.X = torch.load(OUTPUT_DIR / "X.pth", weights_only=True)
+        self.Y = torch.load(OUTPUT_DIR / "Y.pth", weights_only=True)
+        self.P = torch.load(OUTPUT_DIR / "P.pth", weights_only=True)
 
         print(f"X.shape {self.X.shape}")
         print(f"Y.shape {self.Y.shape}")
@@ -41,11 +41,11 @@ class MocapDataset(torch.utils.data.Dataset):
 MAX_EPOCHS = 10000
 BATCH_SIZE = 512
 VAL_DATASET_FACTOR = 0.3  # percentage of data that is reserved for validation set
-L1_LAMBDA = 0.0001  # regularization weight
+L1_LAMBDA = 0.000005  # regularization weight
 MAX_EPOCHS_WITHOUT_IMPROVEMENT = 1000000  # early termination
 CHECKPOINT_CADENCE = 100
 DROPOUT_RATE = 0.3
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 
 if __name__ == "__main__":
     if len(sys.argv) != 1:

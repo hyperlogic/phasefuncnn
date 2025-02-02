@@ -168,12 +168,12 @@ if __name__ == "__main__":
 
     # load output
     y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, skeleton.num_joints)
-    Y = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y.pth"), weights_only=True)
-    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y_mean.pth"), weights_only=True)
-    Y_std = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y_std.pth"), weights_only=True)
+    Y = torch.load(os.path.join(OUTPUT_DIR, "Y.pth"), weights_only=True)
+    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
+    Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
 
     # load phase
-    P = torch.load(os.path.join(OUTPUT_DIR, "tensors/P.pth"), weights_only=True)
+    P = torch.load(os.path.join(OUTPUT_DIR, "P.pth"), weights_only=True)
 
     assert y_lens.num_cols == Y.shape[1]
 

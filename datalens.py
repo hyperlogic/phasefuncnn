@@ -55,7 +55,7 @@ class InputLens:
         offset = next_offset
         next_offset, indices = build_column_indices(offset, 6, joint_count)
         self.joint_pos_im1 = ColumnLens(3, indices)
-        next_offset, indices = build_column_indices(offset + 3, 6, joint_count)
+        _, indices = build_column_indices(offset + 3, 6, joint_count)
         self.joint_vel_im1 = ColumnLens(3, indices)
 
         offset = next_offset

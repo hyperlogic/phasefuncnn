@@ -865,18 +865,18 @@ if __name__ == "__main__":
     print(f"PFNN(in_features = {in_features}, out_features = {out_features}, device = {device}")
     model = PFNN(in_features, out_features, device=device)
     model.eval()  # deactivate dropout
-    state_dict = torch.load(weights_filename, weights_only=False)
+    state_dict = torch.load(weights_filename, weights_only=True)
 
     model.load_state_dict(state_dict)
 
     # load input mean, std and weights. used to unnormalize the inputs
-    X_mean = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_mean.pth"), weights_only=True)
-    X_std = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_std.pth"), weights_only=True)
-    X_w = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_w.pth"), weights_only=True)
+    X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True)
+    X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True)
+    X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True)
 
     # load output mean and std. used to unnormalize the outputs
-    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y_mean.pth"), weights_only=True)
-    Y_std = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y_std.pth"), weights_only=True)
+    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
+    Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
 
     render_buddy = VisOutputRenderBuddy(
         skeleton, x_lens, y_lens, model, Y_mean, Y_std, X_mean, X_std, X_w
