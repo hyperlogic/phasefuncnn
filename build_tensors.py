@@ -100,10 +100,11 @@ if __name__ == "__main__":
     Y = torch.tensor([], dtype=torch.float32, requires_grad=False)
     P = torch.tensor([], dtype=torch.float32, requires_grad=False)
 
+    NUM_JOINTS = 31
     x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, 31)
     y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, 31)
 
-    num_joints = 0
+    num_joints = NUM_JOINTS
     num_anims = len(snakemake.input.skeleton_list)
     assert num_anims > 0
     for i in range(num_anims):
@@ -168,6 +169,7 @@ if __name__ == "__main__":
 
         assert x.shape[1] == x_lens.num_cols
         assert y.shape[1] == y_lens.num_cols
+        assert skeleton.num_joints == NUM_JOINTS
 
         if i == 0:
             X = x
@@ -182,13 +184,14 @@ if __name__ == "__main__":
             assert X.shape[1] == x_lens.num_cols
             assert Y.shape[1] == y_lens.num_cols
 
-    traj_size = TRAJ_WINDOW_SIZE * 4
-    jointpv_size = num_joints * 6
-    jointpva_size = num_joints * 9
-
     # use weights to reduce the importance of input joint features by 10 percent
     X_w = torch.ones((X.shape[1],))
-    X_w[traj_size : traj_size + jointpv_size] = 0.1
+    #X_w[traj_size : traj_size + jointpv_size] = 0.1
+
+    zero2 = torch.zeros((2,))
+    for i in num_joints:
+        x_lens.joint_pos_im1.set(X_w, i, zero2)
+        x_lens.joint_vel_im1.set(X_w, i, zero2)
 
     X_mean, Y_mean = X.mean(dim=0), Y.mean(dim=0)
 
@@ -197,7 +200,7 @@ if __name__ == "__main__":
     X_std, Y_std = X.std(dim=0) + epsilon, Y.std(dim=0) + epsilon
 
     # don't apply normalization to the one hot gait vectors.
-    x_lens.gait_i.set(X_mean, 0, torch.zero((NUM_GAITS,)))
+    x_lens.gait_i.set(X_mean, 0, torch.zeros((NUM_GAITS,)))
     x_lens.gait_i.set(X_std, 0, torch.ones((NUM_GAITS,)))
 
     # normalize and weight the importance of each feature

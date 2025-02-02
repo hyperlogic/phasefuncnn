@@ -89,10 +89,11 @@ class VisInputRenderBuddy(RenderBuddy):
             gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
         )
 
+        gait = torch.argmax(x_lens.gait_i.get(X_row, 0))
         phase = (P[row] / (2.0 * torch.pi)).float()
         text_node = gfx.Text(
             gfx.TextGeometry(
-                text=f"frame={row},phase={phase:.2}",
+                text=f"frame={row},phase={phase:.2},gait={gait}",
                 font_size=20,
                 screen_space=True,
                 text_align="left",
