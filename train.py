@@ -36,12 +36,13 @@ class MocapDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return self.X[idx], self.Y[idx], self.P[idx]
 
+
 # hyperparameters
 MAX_EPOCHS = 10000
 BATCH_SIZE = 512
 VAL_DATASET_FACTOR = 0.3  # percentage of data that is reserved for validation set
-L1_LAMBDA = 0.000001  # regularization weight
-MAX_EPOCHS_WITHOUT_IMPROVEMENT = 10  # early termination
+L1_LAMBDA = 0.0001  # regularization weight
+MAX_EPOCHS_WITHOUT_IMPROVEMENT = 1000000  # early termination
 CHECKPOINT_CADENCE = 100
 DROPOUT_RATE = 0.3
 LEARNING_RATE = 0.001
@@ -166,4 +167,3 @@ if __name__ == "__main__":
 
     # output model
     torch.save(model.state_dict(), OUTPUT_DIR / "final_checkpoint.pth")
-

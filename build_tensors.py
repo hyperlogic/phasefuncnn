@@ -20,6 +20,7 @@ SAMPLE_RATE = 60
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4  # (px, pz, vx, vz)
 NUM_GAITS = 8
+JOINT_IMPORTANCE_SCALE = 0.3
 
 
 def unpickle_obj(filename: str):
@@ -185,9 +186,9 @@ if __name__ == "__main__":
 
     assert curr_start == total_frames
 
-    # use weights to reduce the importance of input joint features by 10 percent
+    # use weights to reduce the importance of input joint features by a scale factor
     X_w = torch.ones((X.shape[1],))
-    jweight = torch.ones((3,)) * 0.1
+    jweight = torch.ones((3,)) * JOINT_IMPORTANCE_SCALE
     for i in range(num_joints):
         x_lens.joint_pos_im1.set(X_w, i, jweight)
         x_lens.joint_vel_im1.set(X_w, i, jweight)

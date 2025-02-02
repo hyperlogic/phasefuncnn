@@ -51,6 +51,7 @@ rule train:
         OUTPUT_DIR / "tensors/Y_mean.pth",
         OUTPUT_DIR / "tensors/Y_std.pth",
         OUTPUT_DIR / "tensors/P.pth",
+        script="train.py",
     output:
         OUTPUT_DIR / "final_checkpoint.pth"
     shell:

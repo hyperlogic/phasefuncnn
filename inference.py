@@ -3,6 +3,7 @@ import glob
 import math
 import os
 import pickle
+import sys
 from typing import Tuple
 
 import numpy as np
@@ -836,6 +837,10 @@ class VisOutputRenderBuddy(RenderBuddy):
 
 if __name__ == "__main__":
 
+    weights_filename = os.path.join(OUTPUT_DIR, "final_checkpoint.pth")
+    if len(sys.argv) > 1:
+        weights_filename = sys.argv[1]
+
     # unpickle skeleton
     # pick ANY skeleton in the output dir, they should all be the same.
     skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "skeleton/*.pkl"))
@@ -860,7 +865,7 @@ if __name__ == "__main__":
     print(f"PFNN(in_features = {in_features}, out_features = {out_features}, device = {device}")
     model = PFNN(in_features, out_features, device=device)
     model.eval()  # deactivate dropout
-    state_dict = torch.load(os.path.join(OUTPUT_DIR, "final_checkpoint.pth"), weights_only=False)
+    state_dict = torch.load(weights_filename, weights_only=False)
 
     model.load_state_dict(state_dict)
 
