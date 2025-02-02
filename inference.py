@@ -185,7 +185,7 @@ def build_idle_input(x_lens: datalens.InputLens) -> torch.Tensor:
         [0.027, -0.034, -0.012],
         [0.022, -0.036, -0.012],
     ]
-    gait = [0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    gait = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     for i, v in enumerate(traj_pos_i):
         x_lens.traj_pos_i.set(x, i, nograd_tensor(v))
     for i, v in enumerate(traj_dir_i):
@@ -195,6 +195,7 @@ def build_idle_input(x_lens: datalens.InputLens) -> torch.Tensor:
     for i, v in enumerate(joint_vel_im1):
         x_lens.joint_vel_im1.set(x, i, nograd_tensor(v))
     x_lens.gait_i.set(x, 0, nograd_tensor(gait))
+
     return x
 
 
@@ -678,7 +679,6 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # rotate stick into root frame.
         root_stick = np.linalg.inv(self.root_xform[:3, :3]) @ world_stick
-
         stick = np.array([root_stick[0], root_stick[2]])
 
         # initialize future part of traj from the mover (controlled via joystick)
@@ -759,6 +759,7 @@ class VisOutputRenderBuddy(RenderBuddy):
 
 
     def build_input(self) -> torch.Tensor:
+
         # NOTE: self.y is already unnormalized
         root_vel = np.array([y_lens.root_vel_i.get(self.y, 0)[0], 0, y_lens.root_vel_i.get(self.y, 0)[1]])
 
@@ -791,11 +792,10 @@ class VisOutputRenderBuddy(RenderBuddy):
             # copy joints over from output to next input.
             joint_pos = y_lens.joint_pos_i.get(self.y, i)
             joint_vel = y_lens.joint_vel_i.get(self.y, i)
-            x_lens.joint_pos_im1.set(self.x, i, joint_pos)
-            x_lens.joint_vel_im1.set(self.x, i, joint_vel)
+            x_lens.joint_pos_im1.set(x, i, joint_pos)
+            x_lens.joint_vel_im1.set(x, i, joint_vel)
 
-        x_lens.gait_i.set(self.x, 0, next_gait)
-
+        x_lens.gait_i.set(x, 0, next_gait)
         x = x_lens.normalize(x, self.x_mean, self.x_std, self.x_w)
         return x
 
@@ -803,13 +803,12 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # integrate phase
         phase_vel = y_lens.phase_vel_i.get(self.y, 0).item()
+
         MIN_PHASE_VEL = 0.0
         MAX_PHASE_VEL = 100000.0
         #phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
         self.phase += phase_vel * (1 / SAMPLE_RATE)
         self.phase = self.phase % (2 * math.pi)
-
-        print(f"phase_vel = {phase_vel}")
 
         # make a batch of 1
         x = self.x.unsqueeze(0).to(device)
@@ -820,7 +819,6 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         # unbatch and unnormalize output
         self.y = y.squeeze().detach().to("cpu")
-
         self.y = y_lens.unnormalize(self.y, self.y_mean, self.y_std)
 
     def on_key_down(self, event):

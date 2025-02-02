@@ -21,6 +21,7 @@ TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4  # (px, pz, vx, vz)
 NUM_GAITS = 8
 
+
 def unpickle_obj(filename: str):
     with open(filename, "rb") as f:
         return pickle.load(f)
@@ -55,8 +56,8 @@ def build_tensors(
 
         for j in range(TRAJ_WINDOW_SIZE):
             traj_start = j * TRAJ_ELEMENT_SIZE
-            x_lens.traj_pos_i.set(x_row, j, traj[i, traj_start:traj_start+2])
-            x_lens.traj_dir_i.set(x_row, j, traj[i, traj_start+2:traj_start+4])
+            x_lens.traj_pos_i.set(x_row, j, traj[i, traj_start : traj_start + 2])
+            x_lens.traj_dir_i.set(x_row, j, traj[i, traj_start + 2 : traj_start + 4])
 
         for j in range(num_joints):
             x_lens.joint_pos_im1.set(x_row, j, jointpva[i - 1, j, 0:3])
@@ -73,14 +74,16 @@ def build_tensors(
         if diff < 0:
             diff = 2 * np.pi + diff
         phase_vel = diff / t
-        assert phase_vel >= 0, f"p1 = {phase[i - 1]}, p2 = {phase[i + 1]}, diff = {diff}, diff2 = {phase[i + 1] - phase[i - 1]}"
+        assert (
+            phase_vel >= 0
+        ), f"p1 = {phase[i - 1]}, p2 = {phase[i + 1]}, diff = {diff}, diff2 = {phase[i + 1] - phase[i - 1]}"
 
         y_row = y[i - 1]
 
         for j in range(TRAJ_WINDOW_SIZE):
             traj_start = j * TRAJ_ELEMENT_SIZE
-            y_lens.traj_pos_ip1.set(y_row, j, traj[i + 1, traj_start:traj_start+2])
-            y_lens.traj_dir_ip1.set(y_row, j, traj[i + 1, traj_start+2:traj_start+4])
+            y_lens.traj_pos_ip1.set(y_row, j, traj[i + 1, traj_start : traj_start + 2])
+            y_lens.traj_dir_ip1.set(y_row, j, traj[i + 1, traj_start + 2 : traj_start + 4])
 
         for j in range(num_joints):
             y_lens.joint_pos_i.set(y_row, j, jointpva[i, j, 0:3])
@@ -96,17 +99,28 @@ def build_tensors(
 
 
 if __name__ == "__main__":
-    X = torch.tensor([], dtype=torch.float32, requires_grad=False)
-    Y = torch.tensor([], dtype=torch.float32, requires_grad=False)
-    P = torch.tensor([], dtype=torch.float32, requires_grad=False)
 
-    NUM_JOINTS = 31
-    x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, 31)
-    y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, 31)
-
-    num_joints = NUM_JOINTS
     num_anims = len(snakemake.input.skeleton_list)
     assert num_anims > 0
+    skeleton = unpickle_obj(snakemake.input.skeleton_list[0])
+    num_joints = skeleton.num_joints
+    x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, num_joints)
+    y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, num_joints)
+
+    total_frames = 0
+    for i in range(num_anims):
+        phase = np.load(snakemake.input.phase_list[i])
+        total_frames += (phase.shape[0]) - 2  # skip first and last frame
+
+    X = torch.empty((total_frames, x_lens.num_cols), dtype=torch.float32)
+    Y = torch.empty((total_frames, y_lens.num_cols), dtype=torch.float32)
+    P = torch.empty((total_frames,), dtype=torch.float32)
+
+    print(f"X.shape = {X.shape}")
+    print(f"Y.shape = {Y.shape}")
+    print(f"P.shape = {P.shape}")
+
+    curr_start = 0
     for i in range(num_anims):
 
         skeleton = unpickle_obj(snakemake.input.skeleton_list[i])
@@ -119,9 +133,7 @@ if __name__ == "__main__":
         gait = np.load(snakemake.input.gait_list[i])
 
         num_frames = root.shape[0]
-        num_joints = skeleton.num_joints
-        x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, num_joints)
-        y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, num_joints)
+        assert num_joints == skeleton.num_joints
 
         print(f"    num_frames = {num_frames}")
         print(f"    num_joints = {num_joints}")
@@ -134,19 +146,13 @@ if __name__ == "__main__":
         print(f"    gait.shape = {gait.shape}")
 
         # verify data shapes
-        assert root.shape[1] == 4 and root.shape[2] == 4
-        assert jointpva.shape[0] == num_frames
-        assert jointpva.shape[1] == num_joints
-        assert jointpva.shape[2] == 9  # (px, py, pz, vx, vy, vz, ax, ay, az)
-        assert traj.shape[0] == num_frames
-        assert traj.shape[1] == TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE
-        assert rootvel.shape[0] == num_frames
-        assert rootvel.shape[1] == 3  # (vx, vz, angvel)
-        assert contacts.shape[0] == num_frames
-        assert contacts.shape[1] == 4  # (lfoot, rfoot, ltoe, rtoe)
-        assert phase.shape[0] == num_frames
-        assert gait.shape[0] == num_frames # (idle, walk, jog, run, crouch, jump, crawl, unknown)
-        assert gait.shape[1] == NUM_GAITS
+        assert root.shape == (num_frames, 4, 4)
+        assert jointpva.shape == (num_frames, num_joints, 9)  # (px, py, pz, vx, vy, vz, ax, ay, az)
+        assert traj.shape == (num_frames, TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE)
+        assert rootvel.shape == (num_frames, 3)  # (vx, vz, angvel)
+        assert contacts.shape == (num_frames, 4)  # (lfoot, rfoot, ltoe, rtoe)
+        assert phase.shape == (num_frames,)
+        assert gait.shape == (num_frames, NUM_GAITS)  # (idle, walk, jog, run, crouch, jump, crawl, unknown)
 
         # convert into tensors
         root = torch.from_numpy(root)
@@ -158,40 +164,33 @@ if __name__ == "__main__":
         gait = torch.from_numpy(gait)
 
         x, y = build_tensors(skeleton, root, jointpva, traj, rootvel, contacts, phase, gait)
+
+        assert x.shape == (num_frames - 2, x_lens.num_cols)
+        assert y.shape == (num_frames - 2, y_lens.num_cols)
+
         p = phase[1:-1]  # also skip the first and last frame, to match x, y
+        assert p.shape == (num_frames - 2,)
 
         print(f"    x.shape = {x.shape}")
         print(f"    y.shape = {y.shape}")
         print(f"    p.shape = {p.shape}")
 
-        assert x.shape[0] == y.shape[0]
-        assert y.shape[0] == p.shape[0]
+        next_start = curr_start + num_frames - 2  # first and last frame are removed
 
-        assert x.shape[1] == x_lens.num_cols
-        assert y.shape[1] == y_lens.num_cols
-        assert skeleton.num_joints == NUM_JOINTS
+        X[curr_start:next_start] = x
+        Y[curr_start:next_start] = y
+        P[curr_start:next_start] = p
 
-        if i == 0:
-            X = x
-            Y = y
-            P = p
-            num_joints = skeleton.num_joints
-        else:
-            X = torch.cat((X, x), dim=0)
-            Y = torch.cat((Y, y), dim=0)
-            P = torch.cat((P, p), dim=0)
+        curr_start = next_start
 
-            assert X.shape[1] == x_lens.num_cols
-            assert Y.shape[1] == y_lens.num_cols
+    assert curr_start == total_frames
 
     # use weights to reduce the importance of input joint features by 10 percent
     X_w = torch.ones((X.shape[1],))
-    #X_w[traj_size : traj_size + jointpv_size] = 0.1
-
-    zero2 = torch.zeros((2,))
-    for i in num_joints:
-        x_lens.joint_pos_im1.set(X_w, i, zero2)
-        x_lens.joint_vel_im1.set(X_w, i, zero2)
+    jweight = torch.ones((3,)) * 0.1
+    for i in range(num_joints):
+        x_lens.joint_pos_im1.set(X_w, i, jweight)
+        x_lens.joint_vel_im1.set(X_w, i, jweight)
 
     X_mean, Y_mean = X.mean(dim=0), Y.mean(dim=0)
 
@@ -208,15 +207,24 @@ if __name__ == "__main__":
     Y = (Y - Y_mean) / Y_std
 
     print(f"X.shape = {X.shape}, X_mean.shape = {X_mean.shape}, X_std.shape = {X_std.shape}")
-    print(f"Y.shape = {Y.shape}, Y_mean.shape = {Y_mean.shape}, Y_std.shape = {Y_std.shape}")
-    print(f"P.shape = {P.shape}")
     print(f"X_mean = {X_mean}")
     print(f"X_std = {X_std}")
+    print(f"X_w = {X_w}")
+    print(f"Y.shape = {Y.shape}, Y_mean.shape = {Y_mean.shape}, Y_std.shape = {Y_std.shape}")
     print(f"Y.mean = {Y_mean}")
     print(f"Y.std = {Y_std}")
+    print(f"P.shape = {P.shape}")
 
-    assert torch.isnan(X).sum().item() == 0
-    assert torch.isnan(Y).sum().item() == 0
+    assert not torch.isnan(X).any()
+    assert not torch.isnan(X_mean).any()
+    assert not torch.isnan(X_std).any()
+    assert not torch.isnan(X_w).any()
+
+    assert not torch.isnan(Y).any()
+    assert not torch.isnan(Y_mean).any()
+    assert not torch.isnan(Y_std).any()
+
+    assert not torch.isnan(P).any()
 
     torch.save(X, snakemake.output.x)
     torch.save(X_mean, snakemake.output.x_mean)

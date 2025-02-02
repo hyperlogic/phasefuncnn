@@ -35,6 +35,7 @@ ANIMS = [
 
 ANIMS = ANIMS + [a + "_mirror" for a in ANIMS]
 
+
 rule all:
     input:
         OUTPUT_DIR / "final_checkpoint.pth"
