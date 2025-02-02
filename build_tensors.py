@@ -100,6 +100,9 @@ if __name__ == "__main__":
     Y = torch.tensor([], dtype=torch.float32, requires_grad=False)
     P = torch.tensor([], dtype=torch.float32, requires_grad=False)
 
+    x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, 31)
+    y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, 31)
+
     num_joints = 0
     num_anims = len(snakemake.input.skeleton_list)
     assert num_anims > 0
@@ -192,6 +195,10 @@ if __name__ == "__main__":
     # Add a small epsilon to std deviation to avoid division by zero
     epsilon = 1e-8
     X_std, Y_std = X.std(dim=0) + epsilon, Y.std(dim=0) + epsilon
+
+    # don't apply normalization to the one hot gait vectors.
+    x_lens.gait_i.set(X_mean, 0, torch.zero((NUM_GAITS,)))
+    x_lens.gait_i.set(X_std, 0, torch.ones((NUM_GAITS,)))
 
     # normalize and weight the importance of each feature
     X = (X - X_mean) * (X_w / X_std)
