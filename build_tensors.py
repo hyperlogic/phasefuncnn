@@ -19,7 +19,7 @@ OUTPUT_DIR = "output"
 SAMPLE_RATE = 60
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4  # (px, pz, vx, vz)
-
+NUM_GAITS = 8
 
 def unpickle_obj(filename: str):
     with open(filename, "rb") as f:
@@ -34,6 +34,7 @@ def build_tensors(
     rootvel: torch.Tensor,
     contacts: torch.Tensor,
     phase: torch.Tensor,
+    gait: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     num_joints = skeleton.num_joints
     num_rows = root.shape[0] - 2  # skip the first and last frame
@@ -42,19 +43,10 @@ def build_tensors(
     x_lens = datalens.InputLens(TRAJ_WINDOW_SIZE, num_joints)
     y_lens = datalens.OutputLens(TRAJ_WINDOW_SIZE, num_joints)
 
-    traj_size = TRAJ_WINDOW_SIZE * 4
-    jointpv_size = num_joints * 6
-    x_shape = (num_rows, traj_size + jointpv_size)
+    x_shape = (num_rows, x_lens.num_cols)
     x = torch.zeros(x_shape)
 
-    jointpva_size = num_joints * 9
-    rootvel_size = 3
-    phasevel_size = 1
-    contacts_size = 4
-    y_shape = (
-        num_rows,
-        traj_size + jointpva_size + rootvel_size + phasevel_size + contacts_size,
-    )
+    y_shape = (num_rows, y_lens.num_cols)
     y = torch.zeros(y_shape)
 
     # skip the first frames, and the last frame
@@ -69,6 +61,8 @@ def build_tensors(
         for j in range(num_joints):
             x_lens.joint_pos_im1.set(x_row, j, jointpva[i - 1, j, 0:3])
             x_lens.joint_vel_im1.set(x_row, j, jointpva[i - 1, j, 3:6])
+
+        x_lens.gait_i.set(x_row, 0, gait[i])
 
         # compute phase_vel
         # Represent angles as unit complex numbers
@@ -102,15 +96,10 @@ def build_tensors(
 
 
 if __name__ == "__main__":
-    """
-    if len(sys.argv) < 2:
-        print("Error: expected list of mocap filenames (without .bvh extension)")
-        exit(1)
-    """
-
     X = torch.tensor([], dtype=torch.float32, requires_grad=False)
     Y = torch.tensor([], dtype=torch.float32, requires_grad=False)
     P = torch.tensor([], dtype=torch.float32, requires_grad=False)
+
     num_joints = 0
     num_anims = len(snakemake.input.skeleton_list)
     assert num_anims > 0
@@ -120,9 +109,10 @@ if __name__ == "__main__":
         root = np.load(snakemake.input.root_list[i])
         jointpva = np.load(snakemake.input.jointpva_list[i])
         traj = np.load(snakemake.input.traj_list[i])
+        rootvel = np.load(snakemake.input.rootvel_list[i])
         contacts = np.load(snakemake.input.contacts_list[i])
         phase = np.load(snakemake.input.phase_list[i])
-        rootvel = np.load(snakemake.input.rootvel_list[i])
+        gait = np.load(snakemake.input.gait_list[i])
 
         num_frames = root.shape[0]
         num_joints = skeleton.num_joints
@@ -137,6 +127,7 @@ if __name__ == "__main__":
         print(f"    rootvel.shape = {rootvel.shape}")
         print(f"    contacts.shape = {contacts.shape}")
         print(f"    phase.shape = {phase.shape}")
+        print(f"    gait.shape = {gait.shape}")
 
         # verify data shapes
         assert root.shape[1] == 4 and root.shape[2] == 4
@@ -150,6 +141,8 @@ if __name__ == "__main__":
         assert contacts.shape[0] == num_frames
         assert contacts.shape[1] == 4  # (lfoot, rfoot, ltoe, rtoe)
         assert phase.shape[0] == num_frames
+        assert gait.shape[0] == num_frames # (idle, walk, jog, run, crouch, jump, crawl, unknown)
+        assert gait.shape[1] == NUM_GAITS
 
         # convert into tensors
         root = torch.from_numpy(root)
@@ -158,8 +151,9 @@ if __name__ == "__main__":
         rootvel = torch.from_numpy(rootvel)
         contacts = torch.from_numpy(contacts)
         phase = torch.from_numpy(phase)
+        gait = torch.from_numpy(gait)
 
-        x, y = build_tensors(skeleton, root, jointpva, traj, rootvel, contacts, phase)
+        x, y = build_tensors(skeleton, root, jointpva, traj, rootvel, contacts, phase, gait)
         p = phase[1:-1]  # also skip the first and last frame, to match x, y
 
         print(f"    x.shape = {x.shape}")

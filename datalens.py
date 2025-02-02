@@ -41,6 +41,7 @@ class InputLens:
     traj_dir_i: ColumnLens
     joint_pos_im1: ColumnLens
     joint_vel_im1: ColumnLens
+    gait_i: ColumnLens
     num_cols: int
 
     def __init__(self, traj_count: int, joint_count: int):
@@ -54,8 +55,12 @@ class InputLens:
         offset = next_offset
         next_offset, indices = build_column_indices(offset, 6, joint_count)
         self.joint_pos_im1 = ColumnLens(3, indices)
-        _, indices = build_column_indices(offset + 3, 6, joint_count)
+        next_offset, indices = build_column_indices(offset + 3, 6, joint_count)
         self.joint_vel_im1 = ColumnLens(3, indices)
+
+        offset = next_offset
+        next_offset, indices = build_column_indices(offset, 8, 1)
+        self.gait_i = ColumnLens(8, indices)
 
         self.num_cols = next_offset
 

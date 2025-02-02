@@ -112,12 +112,12 @@ def build_phase(contacts: np.ndarray) -> np.ndarray:
 
     return phase
 
-def load_phase(basename: str, num_frames: int) -> np.ndarray:
+def load_phase(phase_filename: str, num_frames: int) -> np.ndarray:
     """
     HACK: load the phase directly from the PFNN source. because my phase computation is buggy.
     ALSO, their code outputs phase=0 when both feet are down.
     """
-    with open(os.path.join("../PFNN/data/animations", basename + ".phase"), "r") as f:
+    with open(phase_filename, "r") as f:
         lines = f.readlines()
 
     two_pi = 2.0 * math.pi
@@ -127,6 +127,18 @@ def load_phase(basename: str, num_frames: int) -> np.ndarray:
     values = [values[i] for i in range(0, len(values) - 1, 2)]
     assert len(values) == num_frames, f"{len(values)} expected {num_frames}"
     return np.array(values, dtype=np.float32)
+
+def load_gait(gait_filename: str, num_frames: int) -> np.ndarray:
+
+    gait = np.loadtxt(gait_filename, dtype=np.float32)
+
+    # HACK: SAMPLE_RATE is 1/2 of the mocap.  so skip every other sample
+    # also drop the last sample
+    gait = gait[:-1:2]
+
+    assert gait.shape == (num_frames, 8), f"{gait.shape} expected {(num_frames, 8)}"
+    return gait
+
 
 if __name__ == "__main__":
 
@@ -138,9 +150,13 @@ if __name__ == "__main__":
     phase = build_phase(contacts)
 
     # AJT: HACK use PFNN phase instead of our calculation
-    # num_frames = xforms.shape[0]
-    # phase = load_phase(mocap_basename, num_frames)
+    num_frames = xforms.shape[0]
+    phase = load_phase(snakemake.input.phase, num_frames)
+
+    # Load PFNN gait labels
+    gait = load_gait(snakemake.input.gait, num_frames)
 
     # save contacts, phase
     np.save(snakemake.output.contacts, contacts)
     np.save(snakemake.output.phase, phase)
+    np.save(snakemake.output.gait, gait)

@@ -21,12 +21,12 @@ from pfnn import PFNN
 from renderbuddy import RenderBuddy
 from skeleton import Skeleton
 
-PIPELINE_DIR = "pipeline/output"
-TRAINING_DIR = "output"
+OUTPUT_DIR = "output"
 
 TRAJ_WINDOW_SIZE = 12
 TRAJ_SAMPLE_RATE = 6
 SAMPLE_RATE = 60
+NUM_GAITS = 8
 
 class CharacterMovement(FlyCamInterface):
     speed: float  # units per second
@@ -185,6 +185,7 @@ def build_idle_input(x_lens: datalens.InputLens) -> torch.Tensor:
         [0.027, -0.034, -0.012],
         [0.022, -0.036, -0.012],
     ]
+    gait = [0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     for i, v in enumerate(traj_pos_i):
         x_lens.traj_pos_i.set(x, i, nograd_tensor(v))
     for i, v in enumerate(traj_dir_i):
@@ -193,6 +194,7 @@ def build_idle_input(x_lens: datalens.InputLens) -> torch.Tensor:
         x_lens.joint_pos_im1.set(x, i, nograd_tensor(v))
     for i, v in enumerate(joint_vel_im1):
         x_lens.joint_vel_im1.set(x, i, nograd_tensor(v))
+    x_lens.gait_i.set(x, 0, nograd_tensor(gait))
     return x
 
 
@@ -350,6 +352,9 @@ def build_idle_output(y_lens: datalens.OutputLens) -> torch.Tensor:
     return y
 
 def blend_trajectory(v0: torch.Tensor, v1: torch.Tensor, tau) -> torch.Tensor:
+    assert v0.shape == (TRAJ_WINDOW_SIZE, 2)
+    assert v1.shape == (TRAJ_WINDOW_SIZE, 2)
+
     N = TRAJ_WINDOW_SIZE // 2
     M = TRAJ_WINDOW_SIZE
     t = torch.linspace(0, 1, N).unsqueeze(-1)
@@ -632,7 +637,7 @@ class VisOutputRenderBuddy(RenderBuddy):
                 self.animate_skeleton()
             self.tick_once = False
 
-    def build_trajectory(self, root_vel: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def build_trajectory(self, root_vel: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
         traj_pos = torch.zeros((TRAJ_WINDOW_SIZE, 2))
         traj_dir = torch.zeros((TRAJ_WINDOW_SIZE, 2))
@@ -689,7 +694,15 @@ class VisOutputRenderBuddy(RenderBuddy):
             for i in range(NUM_SUBSTEPS):
                 mover.process(1 / (NUM_SUBSTEPS * TRAJ_SAMPLE_RATE), stick, np.array([0, 0]), 0, 0)
 
-        return traj_pos, traj_dir
+        gait = torch.zeros((NUM_GAITS,))
+        if np.linalg.norm(left_stick) == 0:
+            gait[0] = 1.0  # stand
+        elif np.linalg.norm(left_stick) < 0.5:
+            gait[1] = 1.0  # walk
+        else:
+            gait[3] = 1.0  # run
+
+        return traj_pos, traj_dir, gait
 
     def build_simple_trajectory(self, root_vel: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
 
@@ -758,7 +771,7 @@ class VisOutputRenderBuddy(RenderBuddy):
             prev_traj_pos[i] = self.y_lens.traj_pos_ip1.get(x, i)
             prev_traj_dir[i] = self.y_lens.traj_dir_ip1.get(x, i)
 
-        next_traj_pos, next_traj_dir = self.build_trajectory(root_vel)
+        next_traj_pos, next_traj_dir, next_gait = self.build_trajectory(root_vel)
 
         POS_TAU = 2.0
         traj_pos = blend_trajectory(prev_traj_pos, next_traj_pos, POS_TAU)
@@ -774,14 +787,14 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.x_lens.traj_pos_i.set(x, i, traj_pos[i])
             self.x_lens.traj_dir_i.set(x, i, traj_dir[i])
 
-        # TODO: blend between output trajectory and desired trajectory
-
         for i in range(self.skeleton.num_joints):
             # copy joints over from output to next input.
             joint_pos = y_lens.joint_pos_i.get(self.y, i)
             joint_vel = y_lens.joint_vel_i.get(self.y, i)
             x_lens.joint_pos_im1.set(self.x, i, joint_pos)
             x_lens.joint_vel_im1.set(self.x, i, joint_vel)
+
+        x_lens.gait_i.set(self.x, 0, next_gait)
 
         x = x_lens.normalize(x, self.x_mean, self.x_std, self.x_w)
         return x
@@ -827,7 +840,7 @@ if __name__ == "__main__":
 
     # unpickle skeleton
     # pick ANY skeleton in the output dir, they should all be the same.
-    skeleton_files = glob.glob(os.path.join(PIPELINE_DIR, "skeleton/*.pkl"))
+    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "skeleton/*.pkl"))
     assert len(skeleton_files) > 0, "could not find any pickled skeletons in output folder"
     skeleton = unpickle_obj(skeleton_files[0])
 
@@ -849,18 +862,18 @@ if __name__ == "__main__":
     print(f"PFNN(in_features = {in_features}, out_features = {out_features}, device = {device}")
     model = PFNN(in_features, out_features, device=device)
     model.eval()  # deactivate dropout
-    state_dict = torch.load(os.path.join(TRAINING_DIR, "final_checkpoint.pth"), weights_only=False)
+    state_dict = torch.load(os.path.join(OUTPUT_DIR, "final_checkpoint.pth"), weights_only=False)
 
     model.load_state_dict(state_dict)
 
     # load input mean, std and weights. used to unnormalize the inputs
-    X_mean = torch.load(os.path.join(PIPELINE_DIR, "tensors/X_mean.pth"), weights_only=True)
-    X_std = torch.load(os.path.join(PIPELINE_DIR, "tensors/X_std.pth"), weights_only=True)
-    X_w = torch.load(os.path.join(PIPELINE_DIR, "tensors/X_w.pth"), weights_only=True)
+    X_mean = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_mean.pth"), weights_only=True)
+    X_std = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_std.pth"), weights_only=True)
+    X_w = torch.load(os.path.join(OUTPUT_DIR, "tensors/X_w.pth"), weights_only=True)
 
     # load output mean and std. used to unnormalize the outputs
-    Y_mean = torch.load(os.path.join(PIPELINE_DIR, "tensors/Y_mean.pth"), weights_only=True)
-    Y_std = torch.load(os.path.join(PIPELINE_DIR, "tensors/Y_std.pth"), weights_only=True)
+    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y_mean.pth"), weights_only=True)
+    Y_std = torch.load(os.path.join(OUTPUT_DIR, "tensors/Y_std.pth"), weights_only=True)
 
     render_buddy = VisOutputRenderBuddy(
         skeleton, x_lens, y_lens, model, Y_mean, Y_std, X_mean, X_std, X_w

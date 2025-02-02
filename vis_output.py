@@ -15,7 +15,7 @@ import skeleton_mesh
 from renderbuddy import RenderBuddy
 from skeleton import Skeleton
 
-OUTPUT_DIR = "pipeline/output"
+OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 SAMPLE_RATE = 60

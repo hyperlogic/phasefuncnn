@@ -16,7 +16,7 @@ import math_util as mu
 from skeleton import Skeleton
 from renderbuddy import RenderBuddy
 
-OUTPUT_DIR = "pipeline/output"
+OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
 TRAJ_ELEMENT_SIZE = 4
 

@@ -14,8 +14,7 @@ venv/
 
 # output dir
 output/
-pipeline/.snakemake
-pipeline/output
+.snakemake/
 
 # tensorboard dir
 runs/
