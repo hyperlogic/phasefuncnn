@@ -47,41 +47,75 @@ class PhaseLinear(nn.Module):
         assert self.weights.shape[0] == NUM_CONTROL_POINTS
         assert NUM_CONTROL_POINTS == 4, "This code only works for 4 control points"
 
-        batch_size = phase.shape[0]
+        B, M, N = phase.shape[0], self.in_features, self.out_features
+
+        assert self.weights.shape == (NUM_CONTROL_POINTS, N, M)
+        assert self.biases.shape == (NUM_CONTROL_POINTS, N)
+        assert B > 0
 
         # Use a Catmull-Rom splines to interpolate between the control points in a circle.
         # phase is is between 0 and 2pi.
         # Catmull-Rom expects 4 control points, (P_i-1, P_i, P_i+1, P_i+2) and a t between [0, 1]
         # depending on which quadrant of the circle we are on, we choose different control points accordingly.
-        # In order to do this in batches we use do all 4 quadrants simultaniously then mask the result.
-
         bounds = torch.tensor([0, 0.5, 1, 1.5, 2], device=phase.device) * torch.pi
-        # buckets = torch.bucketize(phase, bounds, right=False)
+
         control_point_indices = torch.tensor(
             [[3, 0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 0], [2, 3, 0, 1]], device=phase.device
         )
 
-        masks, ws, bs = [], [], []
-        for i in range(NUM_QUADRANTS):
-            masks.append(((phase >= bounds[i]) & (phase < bounds[i + 1])).unsqueeze(-1))
+        if B > 1:
+            # In order to do this in batches we use do all 4 quadrants simultaniously then mask the result.
 
+            control_point_indices = torch.tensor(
+                [[3, 0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 0], [2, 3, 0, 1]], device=phase.device
+            )
+
+            masks, ws, bs = [], [], []
+            for i in range(NUM_QUADRANTS):
+                masks.append(((phase >= bounds[i]) & (phase < bounds[i + 1])).unsqueeze(-1))
+
+                t = (phase - bounds[i]) / (bounds[i + 1] - bounds[i])
+                tt = torch.stack([t**3, t**2, t, torch.ones_like(t)], dim=-1)
+
+                indices = control_point_indices[i]
+
+                # Use weights.view to convert weights from (4, N, M) into (4, N * M)
+                w = tt @ self.basis @ self.weights[indices].view(4, -1)
+                b = tt @ self.basis @ self.biases[indices]
+
+                assert w.shape == (B, M * N), w.shape
+                assert b.shape == (B, N), b.shape
+
+                ws.append(w)
+                bs.append(b)
+
+            w = torch.where(masks[0], ws[0], torch.where(masks[1], ws[1], torch.where(masks[2], ws[2], ws[3])))
+            b = torch.where(masks[0], bs[0], torch.where(masks[1], bs[1], torch.where(masks[2], bs[2], bs[3])))
+
+            # Use w.view to convert from (B, N * M) into (B, N, M)
+            w = w.view(B, N, M)
+
+            assert w.shape == (B, N, M), w.shape
+            assert b.shape == (B, N), b.shape
+
+        else:
+            # as an optimization, we don't have to evaluate all 4 quadrants at once
+            i = torch.bucketize(phase, bounds, right=True)[0] - 1
             t = (phase - bounds[i]) / (bounds[i + 1] - bounds[i])
             tt = torch.stack([t**3, t**2, t, torch.ones_like(t)], dim=-1)
 
             indices = control_point_indices[i]
 
-            # Use weights.view to convert weights from (4, M, N) into (4, M * N)
+            # Use weights.view to convert weights from (4, N, M) into (4, N * M)
             w = tt @ self.basis @ self.weights[indices].view(4, -1)
             b = tt @ self.basis @ self.biases[indices]
 
-            ws.append(w)
-            bs.append(b)
+            # Use w.view to convert from (B, N * M) into (B, M, N)
+            w = w.view(B, N, M)
 
-        w = torch.where(masks[0], ws[0], torch.where(masks[1], ws[1], torch.where(masks[2], ws[2], ws[3])))
-        b = torch.where(masks[0], bs[0], torch.where(masks[1], bs[1], torch.where(masks[2], bs[2], bs[3])))
+            assert w.shape == (B, N, M), w.shape
+            assert b.shape == (B, N), b.shape
 
-        # Use w.view to convert from (batch_size, M * N) into (batch_size, M, N)
-        w = w.view(batch_size, self.out_features, self.in_features)
         return w, b
 
     def forward(self, input: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
@@ -142,7 +176,9 @@ def nograd_tensor(array: list):
 
 
 if __name__ == "__main__":
-    # test PhaseLinear module
+    #
+    # unit test for PhaseLinear module
+    #
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -159,16 +195,40 @@ if __name__ == "__main__":
 
     with torch.no_grad():
 
-        weights = nograd_tensor([[[0, 0], [1, 0]], [[-1, 0], [0, 0]], [[0, 0], [-1, 0]], [[1, 0], [0, 0]]]).to(device)
+        # these weights are carfully constructed so that each weight will return e^(i*phase) when evaulated, with [1, 0] as input.
+        weights = nograd_tensor([[[1, 0], [0, 0]], [[0, 0], [1, 0]], [[-1, 0], [0, 0]], [[0, 0], [-1, 0]]]).to(device)
         biases = torch.zeros(4, 2).to(device)
         pl.weights.copy_(weights).to(device)
         pl.biases.copy_(biases).to(device)
-        x = nograd_tensor([[1, 0], [1, 0], [1, 0], [1, 0]]).to(device)
-        phase = nograd_tensor([0, torch.pi / 2, torch.pi, 3 * torch.pi / 2]).to(device)
 
-        y = pl(x, phase)
-        print(f"x = {x}")
-        print("")
-        print(f"phase = {phase}")
-        print("")
-        print(f"y = {y}")
+        # test N samples in a batch, along the circumference of a cirlce
+        N = 32
+        x = nograd_tensor([1, 0]).unsqueeze(0).tile(N, 1).to(device)
+        assert x.shape == (N, 2), x.shape
+        d_theta = (2 * torch.pi) / N
+        phase = nograd_tensor([i * d_theta for i in range(N)]).to(device)
+        assert phase.shape == (N,)
+        y = pl(x, phase).to("cpu")
+        assert y.shape == (N, 2)
+        epsilon = 0.1
+        for i in range(N):
+            theta = i * d_theta
+            point = nograd_tensor([math.cos(theta), math.sin(theta)])
+            assert torch.allclose(y[i], point, atol=epsilon), f"theta = {theta}, y[{i}] = {y[i]}, point = {point}"
+
+        print(f"x =\n{x}")
+        print(f"phase =\n{phase}")
+        print(f"y =\n{y}")
+
+        # test N samples each in it's own batch of 1, along the circumference of a circle
+        for i in range(N):
+            theta = i * d_theta
+            point = nograd_tensor([math.cos(theta), math.sin(theta)])
+
+            x = nograd_tensor([[1, 0]]).to(device)
+            assert x.shape == (1, 2)
+            phase = nograd_tensor([theta]).to(device)
+            assert phase.shape == (1,)
+            y = pl(x, phase).to("cpu")
+            assert y.shape == (1, 2)
+            assert torch.allclose(y[0], point, atol=epsilon), f"theta = {theta}, y = {y[0]}, point = {point}"

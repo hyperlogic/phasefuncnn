@@ -4,6 +4,7 @@ import math
 import os
 import pickle
 import sys
+from time import perf_counter
 from typing import Tuple
 
 import numpy as np
@@ -28,6 +29,7 @@ TRAJ_WINDOW_SIZE = 12
 TRAJ_SAMPLE_RATE = 6
 SAMPLE_RATE = 60
 NUM_GAITS = 8
+
 
 class CharacterMovement(FlyCamInterface):
     speed: float  # units per second
@@ -335,13 +337,25 @@ def build_idle_output(y_lens: datalens.OutputLens) -> torch.Tensor:
     contacts_i = [[0.926, 0.963, 0.816, 0.845]]
     for i, v in enumerate(traj_pos_ip1):
         y_lens.traj_pos_ip1.set(y, i, nograd_tensor(v))
-    for i, v, in enumerate(traj_dir_ip1):
+    for (
+        i,
+        v,
+    ) in enumerate(traj_dir_ip1):
         y_lens.traj_dir_ip1.set(y, i, nograd_tensor(v))
-    for i, v, in enumerate(joint_pos_i):
+    for (
+        i,
+        v,
+    ) in enumerate(joint_pos_i):
         y_lens.joint_pos_i.set(y, i, nograd_tensor(v))
-    for i, v, in enumerate(joint_vel_i):
+    for (
+        i,
+        v,
+    ) in enumerate(joint_vel_i):
         y_lens.joint_vel_i.set(y, i, nograd_tensor(v))
-    for i, v, in enumerate(joint_rot_i):
+    for (
+        i,
+        v,
+    ) in enumerate(joint_rot_i):
         # joint_rot changed from expmap to 6d
         rot = mu.expmap(np.array(v))
         mat = np.eye(4)
@@ -350,15 +364,28 @@ def build_idle_output(y_lens: datalens.OutputLens) -> torch.Tensor:
         rot6d[0:3] = torch.from_numpy(mat[0:3, 0])
         rot6d[3:6] = torch.from_numpy(mat[0:3, 1])
         y_lens.joint_rot_i.set(y, i, rot6d)
-    for i, v, in enumerate(root_vel_i):
+    for (
+        i,
+        v,
+    ) in enumerate(root_vel_i):
         y_lens.root_vel_i.set(y, i, nograd_tensor(v))
-    for i, v, in enumerate(root_angvel_i):
+    for (
+        i,
+        v,
+    ) in enumerate(root_angvel_i):
         y_lens.root_angvel_i.set(y, i, nograd_tensor(v))
-    for i, v, in enumerate(phase_vel_i):
+    for (
+        i,
+        v,
+    ) in enumerate(phase_vel_i):
         y_lens.phase_vel_i.set(y, i, nograd_tensor(v))
-    for i, v, in enumerate(contacts_i):
+    for (
+        i,
+        v,
+    ) in enumerate(contacts_i):
         y_lens.contacts_i.set(y, i, nograd_tensor(v))
     return y
+
 
 def blend_trajectory(v0: torch.Tensor, v1: torch.Tensor, tau) -> torch.Tensor:
     assert v0.shape == (TRAJ_WINDOW_SIZE, 2)
@@ -368,7 +395,7 @@ def blend_trajectory(v0: torch.Tensor, v1: torch.Tensor, tau) -> torch.Tensor:
     M = TRAJ_WINDOW_SIZE
     t = torch.linspace(0, 1, N).unsqueeze(-1)
 
-    alpha = t ** tau
+    alpha = t**tau
     one_minus_alpha = 1 - alpha
 
     result = torch.zeros(v0.shape)
@@ -464,9 +491,10 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.bones = skeleton_mesh.add_skeleton_mesh(self.skeleton, self.skeleton_group)
         self.scene.add(self.skeleton_group)
 
-        self.draw_output_trajectory = True
-        self.draw_input_trajectory = True
-        self.draw_phase = True
+        self.draw_output_trajectory = False
+        self.draw_input_trajectory = False
+        self.draw_phase = False
+        self.profile = False
 
         # add a line for rendering phase as a clock
         if self.draw_phase:
@@ -496,37 +524,44 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.animate_skeleton()
 
     def animate_skeleton(self):
+        update_bones = True
+        if update_bones:
+            # rotate the bones!
+            global_rots = np.array([0, 0, 0, 1]) * np.ones((self.skeleton.num_joints, 4))
+            for i in range(self.skeleton.num_joints):
+                # extract rotation exponent from output
+                rot6d = self.y_lens.joint_rot_i.get(self.y, i)
 
-        # rotate the bones!
-        global_rots = np.array([0, 0, 0, 1]) * np.ones((self.skeleton.num_joints, 4))
-        for i in range(self.skeleton.num_joints):
-            # extract rotation exponent from output
-            rot6d = self.y_lens.joint_rot_i.get(self.y, i)
+                # convert into a quaternion
+                mat = np.eye(3)
+                x_axis = rot6d[0:3].numpy()
+                y_axis = rot6d[3:6].numpy()
+                z_axis = np.linalg.cross(x_axis, y_axis)
+                y_axis = np.linalg.cross(z_axis, x_axis)
+                mat[0:3, 0] = x_axis
+                mat[0:3, 1] = y_axis
+                mat[0:3, 2] = z_axis
+                global_rots[i] = mu.quat_from_mat(mat)
 
-            # convert into a quaternion
-            mat = np.eye(3)
-            x_axis = rot6d[0:3].numpy()
-            y_axis = rot6d[3:6].numpy()
-            z_axis = np.linalg.cross(x_axis, y_axis)
-            y_axis = np.linalg.cross(z_axis, x_axis)
-            mat[0:3, 0] = x_axis
-            mat[0:3, 1] = y_axis
-            mat[0:3, 2] = z_axis
-            global_rots[i] = mu.quat_from_mat(mat)
+                # transform rotations from global_rot to local_rot
+                joint_name = self.skeleton.get_joint_name(i)
+                parent_index = self.skeleton.get_parent_index(joint_name)
+                if parent_index >= 0:
+                    local_rot = mu.quat_mul(mu.quat_inverse(global_rots[parent_index]), global_rots[i])
+                else:
+                    local_rot = global_rots[i]
 
-            # transform rotations from global_rot to local_rot
-            joint_name = self.skeleton.get_joint_name(i)
-            parent_index = self.skeleton.get_parent_index(joint_name)
-            if parent_index >= 0:
-                local_rot = mu.quat_mul(mu.quat_inverse(global_rots[parent_index]), global_rots[i])
-            else:
-                local_rot = global_rots[i]
+                self.bones[i].local.rotation = local_rot
 
-            self.bones[i].local.rotation = local_rot
+        root_start = perf_counter()
 
+        pelvis_start = perf_counter()
         # update pelvis pos
         pelvis_pos = self.y_lens.joint_pos_i.get(self.y, 0).tolist()
         self.bones[0].local.position = pelvis_pos
+        pelvis_end = perf_counter()
+
+        integrate_start = perf_counter()
 
         # apply root motion!
         root_vel = np.array([y_lens.root_vel_i.get(self.y, 0)[0], 0, y_lens.root_vel_i.get(self.y, 0)[1]])
@@ -536,10 +571,17 @@ class VisOutputRenderBuddy(RenderBuddy):
         mu.build_mat_from_quat_pos(
             delta_xform, mu.quat_from_angle_axis(root_angvel * dt, np.array([0, 1, 0])), root_vel * dt
         )
+        integrate_end = perf_counter()
+
+        xform_start = perf_counter()
         self.root_xform = self.root_xform @ delta_xform
         root_pos = self.root_xform[0:3, 3]
+        root_rot = mu.quat_from_mat(self.root_xform)
         self.skeleton_group.local.position = root_pos
-        self.skeleton_group.local.rotation = mu.quat_from_mat(self.root_xform)
+        self.skeleton_group.local.rotation = root_rot
+        xform_end = perf_counter()
+
+        root_end = perf_counter()
 
         # update camera target
         cam_height = 20
@@ -566,7 +608,8 @@ class VisOutputRenderBuddy(RenderBuddy):
                 colors += [[0, 1, 0, 1], [0, 1, 0, 1]]
 
             output_traj_line = gfx.Line(
-                gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+                gfx.Geometry(positions=positions, colors=colors),
+                gfx.LineSegmentMaterial(thickness=2, color_mode="vertex"),
             )
             self.skeleton_group.remove(self.output_traj_line)
             self.skeleton_group.add(output_traj_line)
@@ -581,10 +624,10 @@ class VisOutputRenderBuddy(RenderBuddy):
             positions = []
             colors = []
             for i in range(TRAJ_WINDOW_SIZE - 1):
-                #p0 = x_lens.traj_pos_i.get(x, i)
-                #p1 = x_lens.traj_pos_i.get(x, i + 1)
+                # p0 = x_lens.traj_pos_i.get(x, i)
+                # p1 = x_lens.traj_pos_i.get(x, i + 1)
                 p0 = self.next_traj_pos[i]
-                p1 = self.next_traj_pos[i+1]
+                p1 = self.next_traj_pos[i + 1]
                 positions += [[p0[0], 0.0, p0[1]], [p1[0], 0.0, p1[1]]]
                 if i % 2 == 0:
                     colors += [[1, 1, 1, 1], [1, 1, 1, 1]]
@@ -593,8 +636,8 @@ class VisOutputRenderBuddy(RenderBuddy):
 
             # draw the directions in green
             for i in range(TRAJ_WINDOW_SIZE):
-                #p0 = x_lens.traj_pos_i.get(x, i)
-                #p1 = p0 + x_lens.traj_dir_i.get(x, i)
+                # p0 = x_lens.traj_pos_i.get(x, i)
+                # p1 = p0 + x_lens.traj_dir_i.get(x, i)
                 p0 = self.next_traj_pos[i]
                 p1 = p0 + self.next_traj_dir[i]
 
@@ -602,7 +645,8 @@ class VisOutputRenderBuddy(RenderBuddy):
                 colors += [[0, 1, 0, 1], [0, 1, 0, 1]]
 
             input_traj_line = gfx.Line(
-                gfx.Geometry(positions=positions, colors=colors), gfx.LineSegmentMaterial(thickness=2, color_mode="vertex")
+                gfx.Geometry(positions=positions, colors=colors),
+                gfx.LineSegmentMaterial(thickness=2, color_mode="vertex"),
             )
             self.skeleton_group.remove(self.input_traj_line)
             self.skeleton_group.add(input_traj_line)
@@ -618,11 +662,19 @@ class VisOutputRenderBuddy(RenderBuddy):
             self.clock_group.world.position = (cam_xform @ offset_pos)[0:3]
             self.clock_group.world.rotation = mu.quat_from_mat(cam_xform @ phase_xform)
 
-
+        history_start = perf_counter()
         # record traj history.
         self.history_cursor = (self.history_cursor + 1) % (SAMPLE_RATE * 2)
         self.history_xforms[self.history_cursor] = torch.from_numpy(self.root_xform)
+        history_end = perf_counter()
 
+        if self.profile:
+            print(
+                f"root = {int((root_end - root_start) * 1000)} ms, history = {int((history_end - history_start) * 1000)} ms"
+            )
+            print(
+                f"pelvis = {int((pelvis_end - pelvis_start) * 1000)} ms, integrate = {int((integrate_end - integrate_start) * 1000)} ms, xform = {int((xform_end - xform_start) * 1000)}"
+            )
 
     def on_animate(self, dt: float):
         super().on_animate(dt)
@@ -649,9 +701,19 @@ class VisOutputRenderBuddy(RenderBuddy):
         if self.playing or self.tick_once:
             self.t += dt
             if self.t > (1 / SAMPLE_RATE):
+                input_start = perf_counter()
                 self.x = self.build_input()
+                input_end = perf_counter()
+                tick_start = perf_counter()
                 self.tick_model()
+                tick_end = perf_counter()
+                animate_start = perf_counter()
                 self.animate_skeleton()
+                animate_end = perf_counter()
+                if self.profile:
+                    print(
+                        f"input = {int((input_end - input_start) * 1000)} ms, tick = {int((tick_end - tick_start) * 1000)} ms animate = {int((animate_end - animate_start) * 1000)} ms"
+                    )
             self.tick_once = False
 
     def build_trajectory(self, root_vel: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -706,7 +768,7 @@ class VisOutputRenderBuddy(RenderBuddy):
             traj_pos[i] = nograd_tensor([pos[0], pos[2]])
             traj_dir[i] = nograd_tensor([dir[0], dir[2]])
 
-            NUM_SUBSTEPS = 10
+            NUM_SUBSTEPS = 1
             for i in range(NUM_SUBSTEPS):
                 mover.process(1 / (NUM_SUBSTEPS * TRAJ_SAMPLE_RATE), stick, np.array([0, 0]), 0, 0)
 
@@ -773,7 +835,6 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         return traj_pos, traj_dir
 
-
     def build_input(self) -> torch.Tensor:
 
         # NOTE: self.y is already unnormalized
@@ -788,12 +849,17 @@ class VisOutputRenderBuddy(RenderBuddy):
             prev_traj_pos[i] = self.y_lens.traj_pos_ip1.get(x, i)
             prev_traj_dir[i] = self.y_lens.traj_dir_ip1.get(x, i)
 
-        next_traj_pos, next_traj_dir, next_gait = self.build_trajectory(root_vel)
+        blend_traj = True
+        if blend_traj:
+            next_traj_pos, next_traj_dir, next_gait = self.build_trajectory(root_vel)
+        else:
+            next_traj_pos, next_traj_dir, next_gait = prev_traj_pos, prev_traj_dir, 0
 
-        POS_TAU = 2.0
+        # can be used to tune responsiveness of character, smaller values are more repsonsive
+        POS_TAU = 1.0  # 2.0
+        DIR_TAU = 0.25  # 0.5
+
         traj_pos = blend_trajectory(prev_traj_pos, next_traj_pos, POS_TAU)
-
-        DIR_TAU = 0.5
         traj_dir = blend_trajectory(prev_traj_dir, next_traj_dir, DIR_TAU)
 
         # store for rendering
@@ -822,7 +888,7 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         MIN_PHASE_VEL = 0.0
         MAX_PHASE_VEL = 100000.0
-        #phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
+        # phase_vel = min(max(MIN_PHASE_VEL, phase_vel), MAX_PHASE_VEL)
         self.phase += phase_vel * (1 / SAMPLE_RATE)
         self.phase = self.phase % (2 * math.pi)
 
@@ -867,8 +933,8 @@ if __name__ == "__main__":
 
     print(f"skeleton.num_joints = {skeleton.num_joints}")
 
-    #device = torch.device("cpu")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"cuda.is_available() = {torch.cuda.is_available()}")
     print(f"device = {device}")
 
@@ -893,7 +959,5 @@ if __name__ == "__main__":
     Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True)
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True)
 
-    render_buddy = VisOutputRenderBuddy(
-        skeleton, x_lens, y_lens, model, Y_mean, Y_std, X_mean, X_std, X_w
-    )
+    render_buddy = VisOutputRenderBuddy(skeleton, x_lens, y_lens, model, Y_mean, Y_std, X_mean, X_std, X_w)
     run()

@@ -164,6 +164,8 @@ class RenderBuddy:
             self.pointer_drag_start = mouse_pos
 
     def on_before_render(self, event):
+        start = perf_counter()
+
         _ = event
         now = perf_counter()
         dt = now - self.last_tick_time
@@ -218,7 +220,12 @@ class RenderBuddy:
         self.camera.set_state({"position": self.flycam.pos, "rotation": self.flycam.rot})
 
         # animate stuff here
+        animate_start = perf_counter()
         self.on_animate(dt)
+        animate_end = perf_counter()
+
+        end = perf_counter()
+        # print(f"total {int((end - start) * 1000)} ms, animate = {int((animate_end - animate_start) * 1000)} ms")
 
     def on_close(self, event: gfx.Event):
         _ = event
