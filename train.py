@@ -149,6 +149,11 @@ if __name__ == "__main__":
         else:
             epochs_without_improvement += 1
 
+        writer.add_scalar("lr", LEARNING_RATE)
+        writer.add_scalar("l1_lambda", L1_LAMBDA)
+        writer.add_scalar("batch_size", BATCH_SIZE)
+        writer.add_scalar("dropout", DROPOUT_RATE)
+
         print(f"Epoch {epoch+1}: Training Loss = {avg_train_loss}, Validation Loss = {avg_val_loss}")
 
         if epochs_without_improvement >= MAX_EPOCHS_WITHOUT_IMPROVEMENT:
