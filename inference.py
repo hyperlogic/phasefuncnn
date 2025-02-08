@@ -577,8 +577,7 @@ class VisOutputRenderBuddy(RenderBuddy):
         self.root_xform = self.root_xform @ delta_xform
         root_pos = self.root_xform[0:3, 3]
         root_rot = mu.quat_from_mat(self.root_xform)
-        self.skeleton_group.local.position = root_pos
-        self.skeleton_group.local.rotation = root_rot
+        self.skeleton_group.local.matrix = self.root_xform
         xform_end = perf_counter()
 
         root_end = perf_counter()
