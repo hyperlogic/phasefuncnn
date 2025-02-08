@@ -36,12 +36,19 @@ ANIMS = [
 ANIMS = ANIMS + [a + "_mirror" for a in ANIMS]
 
 
-rule all:
+rule list_rules:
+    run:
+        print("Available rules:")
+        for rule in workflow.rules:
+            print(f" - {rule.name}")
+
+
+rule train:
     input:
         OUTPUT_DIR / "final_checkpoint.pth"
 
 
-rule train:
+rule build_checkpoint:
     input:
         OUTPUT_DIR / "X.pth",
         OUTPUT_DIR / "X_mean.pth",
@@ -141,3 +148,15 @@ rule normalize_tensors:
         p=OUTPUT_DIR / "P.pth",
     script:
         "normalize_tensors.py"
+
+
+rule cook:
+    input:
+        x=OUTPUT_DIR / "X.pth",
+        x_mean=OUTPUT_DIR / "X_mean.pth",
+        x_std=OUTPUT_DIR / "X_std.pth",
+        x_w=OUTPUT_DIR / "X_w.pth",
+        y=OUTPUT_DIR / "Y.pth",
+        y_mean=OUTPUT_DIR / "Y_mean.pth",
+        y_std=OUTPUT_DIR / "Y_std.pth",
+        p=OUTPUT_DIR / "P.pth",
