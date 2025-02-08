@@ -190,7 +190,7 @@ def quat_from_mat(mat):
             y = (m[1, 2] + m[2, 1]) / s
             z = 0.25 * s
 
-    return np.array([x, y, z, w])
+    return quat_normalize(np.array([x, y, z, w]))
 
 
 def quat_from_vectors(from_vec, to_vec):

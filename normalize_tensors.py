@@ -90,6 +90,11 @@ if __name__ == "__main__":
     x_lens.gait_i.set(X_mean, 0, torch.zeros((NUM_GAITS,)))
     x_lens.gait_i.set(X_std, 0, torch.ones((NUM_GAITS,)))
 
+    # don't apply normalization to the joint rotations
+    for i in range(num_joints):
+        y_lens.joint_rot_i.set(Y_mean, i, torch.zeros((6,)))
+        y_lens.joint_rot_i.set(Y_std, i, torch.ones((6,)))
+
     # normalize and weight the importance of each feature
     X = (X - X_mean) * (X_w / X_std)
     Y = (Y - Y_mean) / Y_std

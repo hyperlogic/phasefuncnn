@@ -342,7 +342,14 @@ def build_idle_output(y_lens: datalens.OutputLens) -> torch.Tensor:
     for i, v, in enumerate(joint_vel_i):
         y_lens.joint_vel_i.set(y, i, nograd_tensor(v))
     for i, v, in enumerate(joint_rot_i):
-        y_lens.joint_rot_i.set(y, i, nograd_tensor(v))
+        # joint_rot changed from expmap to 6d
+        rot = mu.expmap(np.array(v))
+        mat = np.eye(4)
+        mu.build_mat_from_quat(mat, rot)
+        rot6d = torch.zeros((6,))
+        rot6d[0:3] = torch.from_numpy(mat[0:3, 0])
+        rot6d[3:6] = torch.from_numpy(mat[0:3, 1])
+        y_lens.joint_rot_i.set(y, i, rot6d)
     for i, v, in enumerate(root_vel_i):
         y_lens.root_vel_i.set(y, i, nograd_tensor(v))
     for i, v, in enumerate(root_angvel_i):
@@ -494,10 +501,18 @@ class VisOutputRenderBuddy(RenderBuddy):
         global_rots = np.array([0, 0, 0, 1]) * np.ones((self.skeleton.num_joints, 4))
         for i in range(self.skeleton.num_joints):
             # extract rotation exponent from output
-            exp = self.y_lens.joint_rot_i.get(self.y, i)
+            rot6d = self.y_lens.joint_rot_i.get(self.y, i)
 
             # convert into a quaternion
-            global_rots[i] = mu.expmap(exp)
+            mat = np.eye(3)
+            x_axis = rot6d[0:3].numpy()
+            y_axis = rot6d[3:6].numpy()
+            z_axis = np.linalg.cross(x_axis, y_axis)
+            y_axis = np.linalg.cross(z_axis, x_axis)
+            mat[0:3, 0] = x_axis
+            mat[0:3, 1] = y_axis
+            mat[0:3, 2] = z_axis
+            global_rots[i] = mu.quat_from_mat(mat)
 
             # transform rotations from global_rot to local_rot
             joint_name = self.skeleton.get_joint_name(i)

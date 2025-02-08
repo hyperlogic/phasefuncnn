@@ -89,7 +89,7 @@ def build_tensors(
         for j in range(num_joints):
             y_lens.joint_pos_i.set(y_row, j, jointpva[i, j, 0:3])
             y_lens.joint_vel_i.set(y_row, j, jointpva[i, j, 3:6])
-            y_lens.joint_rot_i.set(y_row, j, jointpva[i, j, 6:9])
+            y_lens.joint_rot_i.set(y_row, j, jointpva[i, j, 6:12])
 
         y_lens.root_vel_i.set(y_row, 0, rootvel[i, 0:2])
         y_lens.root_angvel_i.set(y_row, 0, rootvel[i, 2:3])
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
     # verify data shapes
     assert root.shape == (num_frames, 4, 4)
-    assert jointpva.shape == (num_frames, num_joints, 9)  # (px, py, pz, vx, vy, vz, ax, ay, az)
+    assert jointpva.shape == (num_frames, num_joints, 12)  # (px, py, pz, vx, vy, vz, m[0,0], m[1,0], m[2,0], m[0,1], m[1,1], m[2,1])
     assert traj.shape == (num_frames, TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE)
     assert rootvel.shape == (num_frames, 3)  # (vx, vz, angvel)
     assert contacts.shape == (num_frames, 4)  # (lfoot, rfoot, ltoe, rtoe)

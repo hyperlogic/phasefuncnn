@@ -102,12 +102,12 @@ class OutputLens:
         self.traj_dir_ip1 = ColumnLens(2, indices)
 
         offset = next_offset
-        next_offset, indices = build_column_indices(offset, 9, joint_count)
+        next_offset, indices = build_column_indices(offset, 12, joint_count)
         self.joint_pos_i = ColumnLens(3, indices)
-        _, indices = build_column_indices(offset + 3, 9, joint_count)
+        _, indices = build_column_indices(offset + 3, 12, joint_count)
         self.joint_vel_i = ColumnLens(3, indices)
-        _, indices = build_column_indices(offset + 6, 9, joint_count)
-        self.joint_rot_i = ColumnLens(3, indices)
+        _, indices = build_column_indices(offset + 6, 12, joint_count)
+        self.joint_rot_i = ColumnLens(6, indices)
 
         offset = next_offset
         next_offset, indices = build_column_indices(offset, 3, 1)

@@ -88,7 +88,19 @@ class RenderBuddy:
                     gfx.MeshPhongMaterial(color=joint_colors[joint_name]),
                 )
                 mesh.local.position = self.jointpva[0][i][0:3]
-                mesh.local.rotation = mu.expmap(self.jointpva[0][i][6:9])
+
+                rot6d = self.jointpva[0][i][6:12]
+                # convert into a quaternion
+                mat = np.eye(3)
+                x_axis = rot6d[0:3]
+                y_axis = rot6d[3:6]
+                z_axis = np.linalg.cross(x_axis, y_axis)
+                y_axis = np.linalg.cross(z_axis, x_axis)
+                mat[0:3, 0] = x_axis
+                mat[0:3, 1] = y_axis
+                mat[0:3, 2] = z_axis
+                mesh.local.rotation = mu.quat_from_mat(mat)
+
                 self.joint_mesh.append(mesh)
                 self.root_group.add(mesh)
 
@@ -235,18 +247,17 @@ if __name__ == "__main__":
         print("Error: expected mocap filename (without .bvh extension)")
         exit(1)
 
-    mocap_basename = sys.argv[1]
-    outbasepath = os.path.join(OUTPUT_DIR, mocap_basename)
+    anim = sys.argv[1]
 
     # unpickle/load data
-    skeleton = unpickle_obj(outbasepath + "_skeleton.pkl")
-    xforms = np.load(outbasepath + "_xforms.npy")
-    root = np.load(outbasepath + "_root.npy")
-    jointpva = np.load(outbasepath + "_jointpva.npy")
-    traj = np.load(outbasepath + "_traj.npy")
-    contacts = np.load(outbasepath + "_contacts.npy")
-    phase = np.load(outbasepath + "_phase.npy")
-    rootvel = np.load(outbasepath + "_rootvel.npy")
+    skeleton = unpickle_obj(os.path.join(OUTPUT_DIR, "skeleton", anim + ".pkl"))
+    xforms = np.load(os.path.join(OUTPUT_DIR, "xforms", anim + ".npy"))
+    root = np.load(os.path.join(OUTPUT_DIR, "root", anim + ".npy"))
+    jointpva = np.load(os.path.join(OUTPUT_DIR, "jointpva", anim + ".npy"))
+    traj = np.load(os.path.join(OUTPUT_DIR, "traj", anim + ".npy"))
+    contacts = np.load(os.path.join(OUTPUT_DIR, "contacts", anim + ".npy"))
+    phase = np.load(os.path.join(OUTPUT_DIR, "phase", anim + ".npy"))
+    rootvel = np.load(os.path.join(OUTPUT_DIR, "rootvel", anim + ".npy"))
 
     renderBuddy = RenderBuddy(skeleton, xforms, root, jointpva, traj, contacts, phase, rootvel)
     run()

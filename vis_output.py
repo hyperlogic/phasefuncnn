@@ -65,12 +65,20 @@ class VisOutputRenderBuddy(RenderBuddy):
         global_rots = np.array([0, 0, 0, 1]) * np.ones((self.skeleton.num_joints, 4))
         for i in range(self.skeleton.num_joints):
             # extract rotation exponent from output
-            exp = self.y_lens.joint_rot_i.get(Y_row, i)
+            rot6d = self.y_lens.joint_rot_i.get(Y_row, i)
 
             # convert into a quaternion
-            global_rots[i] = mu.expmap(exp)
+            mat = np.eye(3)
+            x_axis = rot6d[0:3].numpy()
+            y_axis = rot6d[3:6].numpy()
+            z_axis = np.linalg.cross(x_axis, y_axis)
+            y_axis = np.linalg.cross(z_axis, x_axis)
+            mat[0:3, 0] = x_axis
+            mat[0:3, 1] = y_axis
+            mat[0:3, 2] = z_axis
+            global_rots[i] = mu.quat_from_mat(mat)
 
-            # transform rotations from global_rot to local_rot
+            # transform rotations from root_relative to local to parent joint
             joint_name = self.skeleton.get_joint_name(i)
             parent_index = self.skeleton.get_parent_index(joint_name)
             if parent_index >= 0:

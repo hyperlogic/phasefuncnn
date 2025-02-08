@@ -3,7 +3,7 @@
 # They are packed into a np.ndarray with shape (num_frames, num_joints, 9)
 #   Indices [0:3] are position x, y, z
 #   Indices [3:6] are velocity x, y, z
-#   Indices [6:9] are the joint angles in R^3 form (can use mocap.expmap to convert into a quaternion)
+#   Indices [6:12] are the first two columns of 3x3 matrix.
 
 import math_util as mu
 import numpy as np
@@ -24,13 +24,16 @@ def unpickle_obj(filename: str):
 def build_jointpa_at_frame(skeleton: Skeleton, xforms: np.ndarray, inv_root: np.ndarray, frame: int, jointpva_array: np.ndarray):
     num_joints = skeleton.num_joints
     for i in range(num_joints):
-        local_xform = inv_root[frame] @ xforms[frame][i]
+        root_relative_xform = inv_root[frame] @ xforms[frame][i]
 
         # position
-        jointpva_array[frame, i, 0:3] = local_xform[0:3, 3]
+        jointpva_array[frame, i, 0:3] = root_relative_xform[0:3, 3]
 
         # angle (rotation in expmap format)
-        jointpva_array[frame, i, 6:9] = mu.logmap(mu.quat_from_mat(local_xform))
+        x_axis = root_relative_xform[0:3, 0]
+        y_axis = root_relative_xform[0:3, 1]
+        jointpva_array[frame, i, 6:9] = x_axis / np.linalg.norm(x_axis)
+        jointpva_array[frame, i, 9:12] = y_axis / np.linalg.norm(y_axis)
 
 
 def build_jointv_at_frame(skeleton: Skeleton, frame: int, jointpva_array: np.ndarray):
@@ -50,7 +53,7 @@ def build_jointpva(skeleton: Skeleton, xforms: np.ndarray, root: np.ndarray) -> 
     num_joints = skeleton.num_joints
     num_frames = len(xforms)
     inv_root = np.linalg.inv(root)
-    jointpva_array = np.zeros((num_frames, num_joints, 9))
+    jointpva_array = np.zeros((num_frames, num_joints, 12))
     for frame in range(num_frames):
         build_jointpa_at_frame(skeleton, xforms, inv_root, frame, jointpva_array)
     for frame in range(num_frames):
