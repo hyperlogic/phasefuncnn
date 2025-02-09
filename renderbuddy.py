@@ -39,6 +39,9 @@ class RenderBuddy:
             joystick = pygame.joystick.Joystick(0)  # Use the first joystick
             joystick.init()
             print(f"Joystick initialized: {joystick.get_name()}")
+            print(f"  num_axes = {joystick.get_numaxes()}")
+            print(f"  num_buttons = {joystick.get_numbuttons()}")
+            print(f"  num_hats = {joystick.get_numhats()}")
         else:
             joystick = None
             print("No joystick detected.")
@@ -190,23 +193,24 @@ class RenderBuddy:
             if self.joystick.get_button(5):  # Right Bumper
                 joystick_roll_amount -= 1
 
-            dpad_state = self.joystick.get_hat(0)
-            # d-pad up/down
-            joystick_up_amount += dpad_state[1]
+            if self.joystick.get_numhats() > 0:
+                dpad_state = self.joystick.get_hat(0)
+                # d-pad up/down
+                joystick_up_amount += dpad_state[1]
 
-            # d-pad left/right
-            if dpad_state[0] == -1 and (not self.dpad_left_down or self.dpad_left_time < 0):
-                self.on_dpad_left()
-                self.dpad_left_time = KEY_REPEAT_RATE if self.dpad_left_down else KEY_REPEAT_DELAY
-                self.dpad_left_down = True
+                # d-pad left/right
+                if dpad_state[0] == -1 and (not self.dpad_left_down or self.dpad_left_time < 0):
+                    self.on_dpad_left()
+                    self.dpad_left_time = KEY_REPEAT_RATE if self.dpad_left_down else KEY_REPEAT_DELAY
+                    self.dpad_left_down = True
 
-            elif dpad_state[0] == 1 and (not self.dpad_right_down or self.dpad_right_time < 0):
-                self.on_dpad_right()
-                self.dpad_right_time = KEY_REPEAT_RATE if self.dpad_right_down else KEY_REPEAT_DELAY
-                self.dpad_right_down = True
-            elif dpad_state[0] == 0:
-                self.dpad_left_down = False
-                self.dpad_right_down = False
+                elif dpad_state[0] == 1 and (not self.dpad_right_down or self.dpad_right_time < 0):
+                    self.on_dpad_right()
+                    self.dpad_right_time = KEY_REPEAT_RATE if self.dpad_right_down else KEY_REPEAT_DELAY
+                    self.dpad_right_down = True
+                elif dpad_state[0] == 0:
+                    self.dpad_left_down = False
+                    self.dpad_right_down = False
 
         mouse_stick = self.mouse_look_stick / dt
         self.mouse_look_stick = np.array([0, 0], dtype=np.float32)
