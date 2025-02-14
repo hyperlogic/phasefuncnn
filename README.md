@@ -1,7 +1,7 @@
 Implementation of PFNN
 -------------------------
 build_xforms.py - generates skeleton, world space xforms and world space root motion
-build_jointpva.py - generates root relative joint positions, velocities and angles (logmap)
+build_jointpva.py - generates root relative joint positions, velocities and 'angles' (first two columns of 3x3 rot matrix)
 build_traj.py - generates 2d trajectory samples for each frame.
 build_contacts.py - generates contact info and gait phase
 build_tensors.py - generates pytorch tensors for X, Y and P for each anim
@@ -22,7 +22,7 @@ jointpva/*.npy - np.ndarray of shape (num_frames, num_joints, 9) where each elem
     an array with 9 elements:
     [0:3] (px, py, py) is the position of the joint in root-relative space
     [3:6] (vx, vy, vz) the joint velocity in root-relative space
-    [6:9] (ax, ay, az) the joint orientation in R^3 use mocap.expmap to map to a quaternion.
+    [6:12] (x0, x1, x2, y0, y1, y0) the first two columns of the 3x3 rotation matrix
 traj/*.npy - np.ndarray of shape (num_frames, TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE)
     TRAJ_WINDOW_SIZE is the number of trajectory samples around the current frame.
     TRAJ_ELEMENT_SIZE is 4, [0:2] (px, pz) position of trajectory sample (relative to root of current frame)
@@ -71,7 +71,7 @@ Output tensor (Y.pth)
 y = { trajp_i+1 trajd_i+1 jointp_i jointv_i jointa_i rootvel_i, phasevel_i, contacts_i }
 
 trajpd_i+1 - TRAJ_WINDOW_SIZE * 4 floats total
-jointpva_i - NUM_JOINTS * 9 floats total
+jointpva_i - NUM_JOINTS * 12 floats total
 rootvel_i - 3 floats (vx, vy, angvel)
 phasevel_i - 1 float
 contacts_i - 4 floats

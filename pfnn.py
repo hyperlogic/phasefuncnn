@@ -7,8 +7,6 @@ import torch.nn.functional as F
 
 
 NUM_QUADRANTS = 4
-NUM_BASIS_FUNCTIONS = 4
-
 NUM_CONTROL_POINTS = 4
 
 

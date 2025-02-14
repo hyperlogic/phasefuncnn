@@ -34,7 +34,7 @@ class Skeleton:
         return self.joint_index_map.get(joint_name, -1)
 
     def get_parent_index(self, joint_name: str) -> int:
-        return self.parent_map[joint_name]
+        return self.parent_map.get(joint_name, -1)
 
     def get_children_indices(self, joint_name: str) -> list[int]:
         return self.child_map[joint_name]

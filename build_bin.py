@@ -1,8 +1,10 @@
 import glob
-import torch
 import os
 import pickle
 import sys
+
+import numpy as np
+import torch
 
 import datalens
 from pfnn import NUM_CONTROL_POINTS, PFNN
@@ -44,11 +46,13 @@ if __name__ == "__main__":
     state_dict = torch.load(weights_filename, weights_only=True, map_location=device)
 
     # load input mean, std and weights. used to unnormalize the inputs
+    X = torch.load(os.path.join(OUTPUT_DIR, "X.pth"), weights_only=True, map_location=device)
     X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True, map_location=device)
     X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True, map_location=device)
     X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True, map_location=device)
 
     # load output mean and std. used to unnormalize the outputs
+    Y = torch.load(os.path.join(OUTPUT_DIR, "Y.pth"), weights_only=True, map_location=device)
     Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True, map_location=device)
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True, map_location=device)
 
@@ -58,14 +62,22 @@ if __name__ == "__main__":
     bin_filename = os.path.join(OUTPUT_DIR, os.path.splitext(os.path.basename(weights_filename))[0] + ".bin")
     with open(bin_filename, "wb") as out:
         with torch.no_grad():
-            print("// structure of params.bin")
-            print(f"const int C = {NUM_CONTROL_POINTS}; // num control points")
-            print(f"const int N = {in_features}; // input size")
-            print(f"const int M = {out_features}; // output size")
+            print("// generated from build_bin.py")
+
+            print(f"constexpr size_t NUM_JOINTS = {skeleton.num_joints};")
+            print(f"constexpr size_t TRAJ_WINDOW_SIZE = {TRAJ_WINDOW_SIZE};")
+            print(f"constexpr size_t INPUT_SIZE = {in_features};")
+            print(f"constexpr size_t OUTPUT_SIZE = {out_features};")
+            print(f"constexpr size_t NUM_CONTROL_POINTS = {NUM_CONTROL_POINTS};")
+            for name, param in model.named_parameters():
+                print(
+                    f"constexpr std::array<size_t, {len(param.shape)}> {name.replace('.', '_').upper()}_SIZE = {{{', '.join([str(x) for x in param.shape])}}};"
+                )
+
             print("struct Params {")
             for name, param in model.named_parameters():
                 flat = param.cpu().flatten()
-                print(f"    float {name.replace('.', '_')}[{len(flat)}]; // {tuple(param.shape)}")
+                print(f"    float {name.replace('.', '_')}[{len(flat)}];")
                 out.write(flat.numpy().tobytes())
             print(f"    float x_mean[{X_mean.shape[0]}];")
             out.write(X_mean.numpy().tobytes())
@@ -77,5 +89,14 @@ if __name__ == "__main__":
             out.write(Y_mean.numpy().tobytes())
             print(f"    float y_std[{Y_std.shape[0]}];")
             out.write(Y_std.numpy().tobytes())
+            print(f"    float x_idle[{x_lens.num_cols}];")
+            out.write(X[0].numpy().tobytes())
+            print(f"    float y_idle[{y_lens.num_cols}];")
+            out.write(Y[0].numpy().tobytes())
+            print(f"    int32_t parents[NUM_JOINTS];")
+            parents = [skeleton.get_parent_index(skeleton.get_joint_name(i)) for i in range(skeleton.num_joints)]
+            out.write(np.array(parents, dtype=np.int32).tobytes())
             print("};")
 
+    print(f"model.fc1.weights[0, 1, 3] = {model.fc1.weights[0, 1, 3]}")
+    print(f"model.fc1.weights[2, 3, 1] = {model.fc1.weights[2, 3, 1]}")
