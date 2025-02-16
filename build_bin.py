@@ -4,6 +4,8 @@ import pickle
 import sys
 
 import numpy as np
+from build_traj import TRAJ_SAMPLE_RATE
+from inference import NUM_GAITS, SAMPLE_RATE
 import torch
 
 import datalens
@@ -11,7 +13,6 @@ from pfnn import NUM_CONTROL_POINTS, PFNN
 
 OUTPUT_DIR = "output"
 TRAJ_WINDOW_SIZE = 12
-
 
 def unpickle_obj(filename):
     with open(filename, "rb") as f:
@@ -56,6 +57,8 @@ if __name__ == "__main__":
     Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True, map_location=device)
     Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True, map_location=device)
 
+    P = torch.load(os.path.join(OUTPUT_DIR, "P.pth"), weights_only=True, map_location=device)
+
     model.load_state_dict(state_dict)
 
     # dump model params into a binary file
@@ -69,6 +72,9 @@ if __name__ == "__main__":
             print(f"constexpr size_t INPUT_SIZE = {in_features};")
             print(f"constexpr size_t OUTPUT_SIZE = {out_features};")
             print(f"constexpr size_t NUM_CONTROL_POINTS = {NUM_CONTROL_POINTS};")
+            print(f"constexpr size_t NUM_GAITS = {NUM_GAITS};")
+            print(f"constexpr size_t SAMPLE_RATE = {SAMPLE_RATE};")
+            print(f"constexpr size_t TRAJ_SAMPLE_RATE = {TRAJ_SAMPLE_RATE};")
             for name, param in model.named_parameters():
                 print(
                     f"constexpr std::array<size_t, {len(param.shape)}> {name.replace('.', '_').upper()}_SIZE = {{{', '.join([str(x) for x in param.shape])}}};"
@@ -93,10 +99,20 @@ if __name__ == "__main__":
             out.write(X[0].numpy().tobytes())
             print(f"    float y_idle[{y_lens.num_cols}];")
             out.write(Y[0].numpy().tobytes())
+            print(f"    float y_actual[{y_lens.num_cols}];")
+
+            # evaluate the model on the X[0] and output the result.
+            # this is used as a unit test on the c++ side.
+            x_idle = X[0].unsqueeze(0)
+            y_actual = model(x_idle, torch.tensor([0.0]))[0]
+            assert y_actual.shape == (out_features,), y_actual.shape
+            out.write(y_actual.numpy().tobytes())
+
             print(f"    int32_t parents[NUM_JOINTS];")
             parents = [skeleton.get_parent_index(skeleton.get_joint_name(i)) for i in range(skeleton.num_joints)]
             out.write(np.array(parents, dtype=np.int32).tobytes())
             print("};")
 
+    print(f"P[0] = {P[0]}")
     print(f"model.fc1.weights[0, 1, 3] = {model.fc1.weights[0, 1, 3]}")
     print(f"model.fc1.weights[2, 3, 1] = {model.fc1.weights[2, 3, 1]}")
