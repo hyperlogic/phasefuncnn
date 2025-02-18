@@ -337,25 +337,13 @@ def build_idle_output(y_lens: datalens.OutputLens) -> torch.Tensor:
     contacts_i = [[0.926, 0.963, 0.816, 0.845]]
     for i, v in enumerate(traj_pos_ip1):
         y_lens.traj_pos_ip1.set(y, i, nograd_tensor(v))
-    for (
-        i,
-        v,
-    ) in enumerate(traj_dir_ip1):
+    for i, v in enumerate(traj_dir_ip1):
         y_lens.traj_dir_ip1.set(y, i, nograd_tensor(v))
-    for (
-        i,
-        v,
-    ) in enumerate(joint_pos_i):
+    for i, v in enumerate(joint_pos_i):
         y_lens.joint_pos_i.set(y, i, nograd_tensor(v))
-    for (
-        i,
-        v,
-    ) in enumerate(joint_vel_i):
+    for i, v in enumerate(joint_vel_i):
         y_lens.joint_vel_i.set(y, i, nograd_tensor(v))
-    for (
-        i,
-        v,
-    ) in enumerate(joint_rot_i):
+    for i, v in enumerate(joint_rot_i):
         # joint_rot changed from expmap to 6d
         rot = mu.expmap(np.array(v))
         mat = np.eye(4)
@@ -364,25 +352,13 @@ def build_idle_output(y_lens: datalens.OutputLens) -> torch.Tensor:
         rot6d[0:3] = torch.from_numpy(mat[0:3, 0])
         rot6d[3:6] = torch.from_numpy(mat[0:3, 1])
         y_lens.joint_rot_i.set(y, i, rot6d)
-    for (
-        i,
-        v,
-    ) in enumerate(root_vel_i):
+    for i, v in enumerate(root_vel_i):
         y_lens.root_vel_i.set(y, i, nograd_tensor(v))
-    for (
-        i,
-        v,
-    ) in enumerate(root_angvel_i):
+    for i, v in enumerate(root_angvel_i):
         y_lens.root_angvel_i.set(y, i, nograd_tensor(v))
-    for (
-        i,
-        v,
-    ) in enumerate(phase_vel_i):
+    for i, v in enumerate(phase_vel_i):
         y_lens.phase_vel_i.set(y, i, nograd_tensor(v))
-    for (
-        i,
-        v,
-    ) in enumerate(contacts_i):
+    for i, v in enumerate(contacts_i):
         y_lens.contacts_i.set(y, i, nograd_tensor(v))
     return y
 
