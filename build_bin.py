@@ -113,6 +113,10 @@ if __name__ == "__main__":
             out.write(np.array(parents, dtype=np.int32).tobytes())
             print("};")
 
-    print(f"P[0] = {P[0]}")
-    print(f"model.fc1.weights[0, 1, 3] = {model.fc1.weights[0, 1, 3]}")
-    print(f"model.fc1.weights[2, 3, 1] = {model.fc1.weights[2, 3, 1]}")
+    print("const std::vector<Bone> pfnnBoneVec =")
+    print("{")
+    for i, name in enumerate(skeleton.joint_names):
+        offset = skeleton.get_joint_offset(name)
+        parent_index = skeleton.get_parent_index(name)
+        print(f'    {{"{name}", {parent_index}, glm::mat4(1.0f, 0.0f, 0.0f, {offset[0]}f, 0.0f, 1.0f, 0.0f, {offset[1]}, 0.0f, 0.0f, 1.0f, {offset[2]}, 0.0f, 0.0f, 0.0f, 1.0f)}},')
+    print("};")
