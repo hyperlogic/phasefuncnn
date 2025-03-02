@@ -57,10 +57,10 @@ class RenderBuddy:
         self.scene.add(gfx.helpers.GridHelper(size=100))
 
         self.draw_phase = True
-        self.draw_root = True
+        self.draw_root = False
         self.draw_joints = True
-        self.draw_jointvel = True
-        self.draw_traj = True
+        self.draw_jointvel = False
+        self.draw_traj = False
         self.draw_rootvel = False
 
         # use a group to position all elements that are in root-relative space
@@ -83,10 +83,13 @@ class RenderBuddy:
                 radius = 0.5
 
                 # add a box to render each joint
+                """
                 mesh = gfx.Mesh(
                     gfx.box_geometry(radius, radius, radius),
                     gfx.MeshPhongMaterial(color=joint_colors[joint_name]),
                 )
+                """
+                mesh = gfx.helpers.AxesHelper(radius * 2, 1)
                 mesh.local.position = self.jointpva[0][i][0:3]
 
                 rot6d = self.jointpva[0][i][6:12]
