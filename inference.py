@@ -23,7 +23,7 @@ from pfnn import PFNN
 from renderbuddy import RenderBuddy
 from skeleton import Skeleton
 
-OUTPUT_DIR = "output"
+DEFAULT_DIR = "data/checkpoint"
 
 TRAJ_WINDOW_SIZE = 12
 TRAJ_SAMPLE_RATE = 6
@@ -893,13 +893,13 @@ class VisOutputRenderBuddy(RenderBuddy):
 
 if __name__ == "__main__":
 
-    weights_filename = os.path.join(OUTPUT_DIR, "final_checkpoint.pth")
+    weights_filename = os.path.join(DEFAULT_DIR, "final_checkpoint.pth")
     if len(sys.argv) > 1:
         weights_filename = sys.argv[1]
 
     # unpickle skeleton
     # pick ANY skeleton in the output dir, they should all be the same.
-    skeleton_files = glob.glob(os.path.join(OUTPUT_DIR, "skeleton/*.pkl"))
+    skeleton_files = glob.glob(os.path.join(DEFAULT_DIR, "skeleton.pkl"))
     assert len(skeleton_files) > 0, "could not find any pickled skeletons in output folder"
     skeleton = unpickle_obj(skeleton_files[0])
 
@@ -926,13 +926,13 @@ if __name__ == "__main__":
     model.load_state_dict(state_dict)
 
     # load input mean, std and weights. used to unnormalize the inputs
-    X_mean = torch.load(os.path.join(OUTPUT_DIR, "X_mean.pth"), weights_only=True, map_location=device)
-    X_std = torch.load(os.path.join(OUTPUT_DIR, "X_std.pth"), weights_only=True, map_location=device)
-    X_w = torch.load(os.path.join(OUTPUT_DIR, "X_w.pth"), weights_only=True, map_location=device)
+    X_mean = torch.load(os.path.join(DEFAULT_DIR, "X_mean.pth"), weights_only=True, map_location=device)
+    X_std = torch.load(os.path.join(DEFAULT_DIR, "X_std.pth"), weights_only=True, map_location=device)
+    X_w = torch.load(os.path.join(DEFAULT_DIR, "X_w.pth"), weights_only=True, map_location=device)
 
     # load output mean and std. used to unnormalize the outputs
-    Y_mean = torch.load(os.path.join(OUTPUT_DIR, "Y_mean.pth"), weights_only=True, map_location=device)
-    Y_std = torch.load(os.path.join(OUTPUT_DIR, "Y_std.pth"), weights_only=True, map_location=device)
+    Y_mean = torch.load(os.path.join(DEFAULT_DIR, "Y_mean.pth"), weights_only=True, map_location=device)
+    Y_std = torch.load(os.path.join(DEFAULT_DIR, "Y_std.pth"), weights_only=True, map_location=device)
 
     render_buddy = VisOutputRenderBuddy(skeleton, x_lens, y_lens, model, Y_mean, Y_std, X_mean, X_std, X_w)
     run()
