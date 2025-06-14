@@ -92,14 +92,12 @@ class VisInputRenderBuddy(RenderBuddy):
         gait = torch.argmax(x_lens.gait_i.get(X_row, 0))
         phase = (P[row] / (2.0 * torch.pi)).float()
         text_node = gfx.Text(
-            gfx.TextGeometry(
-                text=f"frame={row},phase={phase:.2},gait={gait}",
-                font_size=20,
-                screen_space=True,
-                text_align="left",
-                anchor="top-left",
-            ),
-            gfx.TextMaterial(color="#ffffff", outline_color="#000", outline_thickness=1),
+            text=f"frame={row},phase={phase:.2},gait={gait}",
+            font_size=20,
+            screen_space=True,
+            text_align="left",
+            anchor="top-left",
+            material=gfx.TextMaterial(color="#ffffff", outline_color="#000", outline_thickness=1),
         )
 
         self.row_group.add(text_node)

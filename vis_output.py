@@ -124,14 +124,12 @@ class VisOutputRenderBuddy(RenderBuddy):
 
         phase = (P[row] / (2.0 * torch.pi)).float()
         text_node = gfx.Text(
-            gfx.TextGeometry(
-                text=f"frame={row},phase={phase:.2}",
-                font_size=20,
-                screen_space=True,
-                text_align="left",
-                anchor="top-left",
-            ),
-            gfx.TextMaterial(color="#ffffff", outline_color="#000", outline_thickness=1),
+            text=f"frame={row},phase={phase:.2}",
+            font_size=20,
+            screen_space=True,
+            text_align="left",
+            anchor="top-left",
+            material=gfx.TextMaterial(color="#ffffff", outline_color="#000", outline_thickness=1),
         )
 
         self.skeleton_group.add(text_node)

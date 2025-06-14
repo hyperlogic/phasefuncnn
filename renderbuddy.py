@@ -1,6 +1,7 @@
 from time import perf_counter
 
 import numpy as np
+import platform
 import pygame
 import pygfx as gfx
 import wgpu
@@ -35,7 +36,8 @@ class RenderBuddy:
 
     def __init__(self):
         pygame.init()
-        if pygame.joystick.get_count() > 0:
+        # joystick doesn't work on linux.
+        if pygame.joystick.get_count() > 0 and platform.system() != "Linux":
             joystick = pygame.joystick.Joystick(0)  # Use the first joystick
             joystick.init()
             print(f"Joystick initialized: {joystick.get_name()}")
