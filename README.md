@@ -6,10 +6,15 @@ Required for training, PFNN use their .bvh data for training.
 
 Setup
 ---------------------------
-`python -m venv venv`
-`source venv/bin/actctivate`
-`pip install -r requirements.txt`
+* `uv sync` - Install dependencies and setup venv.
+* `uv run inference.py` - To run the final_checkpoint.pth in the data folder.  Use asdw keys to move.
 
+Training
+---------------------------
+* `uv run snakemake cook --cores 4` - Cook the data for training.
+* (optional) `uv run vis_output.py` - Press spacebar to visually inspect the training data, frame by frame.
+* `uv run train.py` - Begin training, the more epochs the better, saves a checkpoint every 100 epochs
+* `uv run inference.py output/checkpoint_name.pth` - Run the desired checkpoint. Use asdw keys to move.
 
 Key files
 ----------------------
