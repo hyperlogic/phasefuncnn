@@ -1,6 +1,8 @@
 Implementation of PFNN
 -------------------------
 
+<img width="1003" height="680" alt="image" src="https://github.com/user-attachments/assets/9018e5fb-ed8c-42f7-b8a7-a0622fbe205e" />
+
 clone https://github.com/sreyafrancis/PFNN as a sibling directory for this repo.
 Required for training, PFNN use their .bvh data for training.
 
