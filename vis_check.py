@@ -1,4 +1,7 @@
 #
+# Copyright (c) 2025 Anthony J. Thibault
+# This software is licensed under the MIT License. See LICENSE for more details.
+#
 # loads in a bvh file and displays it's animaiton
 # also loads in the cooked input and output tensor and displays it.
 # they SHOULD match.

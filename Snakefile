@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2025 Anthony J. Thibault
+# This software is licensed under the MIT License. See LICENSE for more details.
+#
+
 import pathlib
 
 PFNN_DIR = pathlib.Path("../PFNN/data/animations")

@@ -1,4 +1,7 @@
 #
+# Copyright (c) 2025 Anthony J. Thibault
+# This software is licensed under the MIT License. See LICENSE for more details.
+#
 # loads all the intermediate numpy arrays from build_xforms, build_jointpva, build_traj, and build_contacts
 # and outputs the input (X) output (Y) and phase (P) appropriate pytorch tensors ready for training.
 #

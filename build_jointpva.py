@@ -1,4 +1,7 @@
 #
+# Copyright (c) 2025 Anthony J. Thibault
+# This software is licensed under the MIT License. See LICENSE for more details.
+#
 # Build root-space position, velocity and angles (pva) for each joint
 # They are packed into a np.ndarray with shape (num_frames, num_joints, 9)
 #   Indices [0:3] are position x, y, z

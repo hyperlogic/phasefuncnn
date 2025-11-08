@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2025 Anthony J. Thibault
+# This software is licensed under the MIT License. See LICENSE for more details.
+#
 # go thru the mocap data and ensure
 # verify that all the bvh have the same skeleton
 

@@ -1,4 +1,7 @@
 #
+# Copyright (c) 2025 Anthony J. Thibault
+# This software is licensed under the MIT License. See LICENSE for more details.
+#
 # Build trajectory for root character motion
 # Each frame contains TRAJ_WINDOW_SIZE * TRAJ_ELEMENT_SIZE floats
 # Each element contains pos (x, z) and direction (x, z)

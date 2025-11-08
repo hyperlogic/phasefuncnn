@@ -1,4 +1,7 @@
 #
+# Copyright (c) 2025 Anthony J. Thibault
+# This software is licensed under the MIT License. See LICENSE for more details.
+#
 # Build world space matrices for each joint at the given SAMPLE_RATE
 # Also, build the root motion matrices for the character.
 # And output the skeleton for the character (Skeleton)
