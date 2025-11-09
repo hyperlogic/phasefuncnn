@@ -14,8 +14,8 @@ Training
   This is required for training, this project uses their .bvh data for training.
 * `uv run snakemake cook --cores 4` - Cook the data for training.
 * (optional) `uv run vis_output.py` - Press spacebar to visually inspect the training data, frame by frame.
-* `uv run train.py` - Begin training, the more epochs the better, saves a checkpoint every 100 epochs
-* `uv run inference.py output/checkpoint_name.pth` - Run the desired checkpoint. Use asdw keys to move.
+* `uv run train.py` - Begin training, a good stopping point is 500 epochs, it saves a checkpoint every 100 epochs.
+* `uv run inference.py output/checkpoint_500.pth` - Run the desired checkpoint. Use asdw keys to move.
 
 Key files
 ----------------------
